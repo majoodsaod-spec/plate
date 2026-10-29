@@ -715,3 +715,14 @@ button, .seg, summary, label.photoBtn { -webkit-user-select: none; user-select: 
 /* fixed size: no zoom */
 html, body { -webkit-text-size-adjust: 100%; touch-action: pan-x pan-y; }
 input, select, textarea { font-size: max(16px, 1em); }
+
+/* the chat message box floats above the keyboard (see composer.js) */
+:root { --kb: 0px; --composerH: 0px; }
+#gcForm, #nForm, #chatForm { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); width: min(608px, calc(100% - 32px)); bottom: calc(env(safe-area-inset-bottom) + 10px); margin: 0; padding: 10px; border-radius: 22px; transition: bottom .12s ease-out; }
+html.kb-open #gcForm, html.kb-open #nForm, html.kb-open #chatForm { bottom: calc(var(--kb) + 8px); padding: 6px; border-radius: 20px; }
+#gcForm textarea, #nForm textarea, #chatForm textarea { min-height: 52px; font-size: 16px; line-height: 1.35; padding: 14px 12px; }
+html.kb-open #gcForm textarea, html.kb-open #nForm textarea, html.kb-open #chatForm textarea { min-height: 40px; padding: 9px 10px; }
+#gcForm .primary, #nForm .primary, #chatForm .primary { min-height: 44px; align-self: flex-end; }
+#gCoach:not([hidden]), #nAsk:not([hidden]), #view-recipes { padding-bottom: var(--composerH); }
+.chips button { line-height: 1.25; }
+.chips button { height: auto; min-height: 36px; padding-top: 8px; padding-bottom: 8px; text-align: center; }
