@@ -208,7 +208,12 @@
   showTab(last, false);
   renderToday();
   Auth.init();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    /* a new version took over: reload once so what is on screen is the new version (not on the very first install) */
+    const had = !!navigator.serviceWorker.controller; let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!had || reloaded) return; reloaded = true; location.reload(); });
+    navigator.serviceWorker.register('sw.js').then((r) => { try { r.update(); } catch (e) {} }).catch(() => {});
+  }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();
 
