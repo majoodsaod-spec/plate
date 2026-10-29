@@ -443,6 +443,8 @@ ${catalogue()}`;
   const CHIPS = ['I want Thursday to be upper body. Build a plan around that', 'What should I train today?', 'What have I been neglecting?', 'I only have 30 minutes', 'Build me a 4-day split', 'Chest and arms with dumbbells only'];
   function renderCoach() {
     const c = st.coach;
+    /* a redraw (a sync landing, a tab switch) must not eat what is being typed: keep the draft, the caret and the focus */
+    const old = $('#gcIn'), keep = old ? { v: old.value, s: old.selectionStart, e: old.selectionEnd, f: document.activeElement === old } : null;
     $('#gCoach').innerHTML = `<div class="chat" id="gcChat" aria-live="polite">${c.msgs.length ? c.msgs.map((m, i) => {
       if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>`;
       if (m.wait) return '<div class="msg ai wait">Thinking…</div>';
@@ -453,6 +455,7 @@ ${catalogue()}`;
       <form class="composer" id="gcForm" autocomplete="off"><textarea id="gcIn" rows="1" maxlength="400" placeholder="Ask your coach…" aria-label="Message"></textarea><button class="primary" type="submit" id="gcGo">Send</button></form>
       <p class="hint nfoot">General fitness guidance, not medical advice. If something hurts, stop and see a doctor or physio.</p>`;
     const last = $('#gcChat').lastElementChild; if (last && c.msgs.length > 1) last.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    const nw = $('#gcIn'); if (keep && nw && keep.v) { nw.value = keep.v; if (keep.f) { nw.focus({ preventScroll: true }); try { nw.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   }
   /* "I want Thursday to be upper body": whatever the AI built, a day the person pinned in their own words stays exactly as they said */
   const TYPE_WORDS = [[/\bupper\b/, 'upper'], [/\blower\b/, 'lower'], [/\bpush\b/, 'push'], [/\bpull\b/, 'pull'], [/\blegs?\b/, 'legs'], [/\bfull[ -]?body\b/, 'full'], [/\b(rest|off)\b/, 'rest'], [/\bcardio\b/, 'cardio']];
