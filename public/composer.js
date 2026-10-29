@@ -7,6 +7,18 @@
   const root = document.documentElement, vv = window.visualViewport;
   let kbOpen = false;
 
+  /* while you type in a chat box the page itself stops scrolling: the screen is the visible area above the keyboard, the messages scroll inside it, and the box sits at its bottom */
+  let locked = false, savedY = 0;
+  const isChatField = (el) => !!(el && el.matches && el.matches('#gcIn, #nInput, #chatInput'));
+  function lock() {
+    if (locked) return; locked = true; savedY = window.scrollY;
+    root.classList.add('chatlock'); const m = document.querySelector('main'); if (m) m.scrollTop = savedY;
+  }
+  function unlock() {
+    if (!locked) return; locked = false;
+    const m = document.querySelector('main'), y = m ? m.scrollTop : 0;
+    root.classList.remove('chatlock'); if (m) m.scrollTop = 0; window.scrollTo(0, y);
+  }
   let typing = false;                                   // a text field has focus (so the keyboard is up or coming up)
   const isField = (el) => !!(el && el.matches && el.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea, select, [contenteditable]'));
   const layoutH = () => Math.max(window.innerHeight, root.clientHeight || 0);
@@ -52,11 +64,11 @@
   document.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('.composer textarea')) { grow(e.target); reserve(); } });
   /* when the keyboard comes up, keep the latest messages in view above the box */
   document.addEventListener('focusin', (e) => {
-    if (isField(e.target)) { typing = true; burst(1200); }
+    if (isField(e.target)) { typing = true; if (isChatField(e.target)) lock(); burst(1200); }
     if (!e.target.matches || !e.target.matches('.composer textarea')) return;
     [120, 380].forEach((ms) => setTimeout(() => { place(); const chat = document.querySelector('.view:not([hidden]) .chat'); const last = chat && chat.lastElementChild; if (last) last.scrollIntoView({ block: 'end' }); }, ms));
   });
-  document.addEventListener('focusout', () => setTimeout(() => { typing = isField(document.activeElement); burst(800); }, 120));
+  document.addEventListener('focusout', () => setTimeout(() => { typing = isField(document.activeElement); if (!isChatField(document.activeElement)) unlock(); burst(800); }, 120));
   /* the boxes are redrawn and shown/hidden by other code: keep measurements fresh */
   if (window.MutationObserver) new MutationObserver(() => { grow(); reserve(); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
   if (window.ResizeObserver) { const ro = new ResizeObserver(reserve); const watch = () => document.querySelectorAll(FLOAT).forEach((f) => ro.observe(f)); watch(); setTimeout(watch, 1500); }

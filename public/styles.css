@@ -731,3 +731,11 @@ html.kb-open #gcForm textarea, html.kb-open #nForm textarea, html.kb-open #chatF
 :root { --vvtop: 0px; --topH: 90px; }
 header.top { transform: translateY(var(--vvtop)); }
 [aria-label="Nutrition"].segs, [aria-label="Gym sections"].segs, [aria-label="Recipes"].segs { position: sticky; top: calc(var(--topH) + 6px); z-index: 9; transform: translateY(var(--vvtop)); box-shadow: 0 -8px 0 var(--bg), 0 8px 0 var(--bg); }
+
+/* typing in a chat: the page is the visible area above the keyboard (see composer.js) */
+html.chatlock, html.chatlock body { overflow: hidden; }
+html.chatlock body { position: fixed; top: 0; left: 0; right: 0; height: var(--vvh); transform: translateY(var(--vvtop)); }
+html.chatlock header.top { transform: none; }
+html.chatlock main { height: calc(var(--vvh) - var(--topH)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--composerH) + 4px); }
+html.chatlock [aria-label="Nutrition"].segs, html.chatlock [aria-label="Gym sections"].segs, html.chatlock [aria-label="Recipes"].segs { transform: none; top: 6px; }
+html.chatlock #gcForm, html.chatlock #nForm, html.chatlock #chatForm { bottom: 8px; transition: none; }
