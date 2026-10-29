@@ -734,7 +734,7 @@ header.top { transform: translateY(var(--vvtop)); }
 
 /* typing in a chat: the page is the visible area above the keyboard (see composer.js) */
 html.chatlock, html.chatlock body { overflow: hidden; }
-html.chatlock body { position: fixed; top: 0; left: 0; right: 0; height: var(--vvh); transform: translateY(var(--vvtop)); }
+html.chatlock body { position: fixed; top: 0; left: 0; right: 0; height: var(--vvh); }
 html.chatlock header.top { transform: none; }
 html.chatlock main { height: calc(var(--vvh) - var(--topH)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--composerH) + 4px); }
 html.chatlock [aria-label="Nutrition"].segs, html.chatlock [aria-label="Gym sections"].segs, html.chatlock [aria-label="Recipes"].segs { transform: none; top: 6px; }

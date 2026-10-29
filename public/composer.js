@@ -31,7 +31,7 @@
     root.style.setProperty('--kb', (kbOpen ? kb : 0) + 'px');
     root.classList.toggle('kb-open', kbOpen);
     /* iOS slides the visible area when the keyboard opens; the top bars follow it so they stay on screen */
-    root.style.setProperty('--vvtop', (typing && vv ? Math.max(0, Math.round(vv.offsetTop)) : 0) + 'px');
+    root.style.setProperty('--vvtop', (typing && !locked && vv ? Math.max(0, Math.round(vv.offsetTop)) : 0) + 'px');
     const top = document.querySelector('header.top'); if (top) root.style.setProperty('--topH', top.offsetHeight + 'px');
     root.style.setProperty('--vvh', (vv ? Math.round(vv.height) : window.innerHeight) + 'px');
     grow(); reserve(); dbg();
