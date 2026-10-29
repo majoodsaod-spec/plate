@@ -37,3 +37,6 @@ Put your Worker address in `config.js` (`window.PLATE_API = 'https://plate-proxy
 2. Worker -> Variables and Secrets -> add secret `RESEND_API_KEY`. Optionally `MAIL_FROM` = `Plate <hello@yourdomain.com>` once you have verified a domain in Resend.
 3. Without a verified domain Resend only delivers to the email you signed up to Resend with, so codes would not reach other people. Leave this off until you have a domain.
 Also run the new lines at the bottom of `worker/schema.sql` in the D1 console (the `ident` and `otps` tables).
+
+## Deploying
+Pushing to `main` deploys the app (the `public/` folder) to the Cloudflare Worker `plate`. The server in `worker/` is pasted into `plate-proxy` by hand.
