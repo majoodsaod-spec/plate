@@ -738,4 +738,6 @@ html.chatlock body { position: fixed; top: 0; left: 0; right: 0; height: var(--v
 html.chatlock header.top { transform: none; }
 html.chatlock main { height: calc(var(--vvh) - var(--topH)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--composerH) + 4px); }
 html.chatlock [aria-label="Nutrition"].segs, html.chatlock [aria-label="Gym sections"].segs, html.chatlock [aria-label="Recipes"].segs { transform: none; top: 6px; }
-html.chatlock #gcForm, html.chatlock #nForm, html.chatlock #chatForm { bottom: 8px; transition: none; }
+html.chatlock #gcForm, html.chatlock #nForm, html.chatlock #chatForm { bottom: calc(var(--kb) + 8px); transition: none; }
+html.chatlock.chatfollow #gcForm, html.chatlock.chatfollow #nForm, html.chatlock.chatfollow #chatForm { bottom: 8px; }   /* in follow mode the page itself is moved, so the box is placed inside it */
+html.chatlock.chatfollow body { transform: translateY(var(--vvtop)); }
