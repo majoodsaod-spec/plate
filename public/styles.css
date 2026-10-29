@@ -713,5 +713,5 @@ button, .seg, summary, label.photoBtn { -webkit-user-select: none; user-select: 
 .acts.undone { opacity: .6; } .acts.undone b { color: var(--muted); }
 
 /* fixed size: no zoom */
-html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+html, body { -webkit-text-size-adjust: 100%; touch-action: pan-x pan-y; }
 input, select, textarea { font-size: max(16px, 1em); }
