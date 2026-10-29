@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101113" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Plate">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Plate</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="bar">
+    <h1>Plate</h1>
+    <button class="icon" id="openSettings" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-today" data-tab="today" aria-controls="view-today" aria-selected="true">Today</button>
+    <button role="tab" id="tab-recipes" data-tab="recipes" aria-controls="view-recipes" aria-selected="false">Recipes</button>
+    <button role="tab" id="tab-nutrition" data-tab="nutrition" aria-controls="view-nutrition" aria-selected="false">Nutrition</button>
+    <button role="tab" id="tab-gym" data-tab="gym" aria-controls="view-gym" aria-selected="false">Gym</button>
+    <button role="tab" id="tab-insights" data-tab="insights" aria-controls="view-insights" aria-selected="false">Insights</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 1. Today -->
+  <section class="view" id="view-today" role="tabpanel" aria-labelledby="tab-today">
+    <div class="dayNav" id="dayNav">
+      <button type="button" class="icon" id="dayPrev" aria-label="Previous day">&#8249;</button>
+      <button type="button" class="dayLabel" id="dayLabel" aria-label="Pick a day"><b id="dayName">Today</b><span id="dayDate"></span></button>
+      <button type="button" class="icon" id="dayNext" aria-label="Next day">&#8250;</button>
+      <input type="date" id="dayPick" aria-label="Choose a date" tabindex="-1">
+    </div>
+    <p class="pastBar" id="pastBar" hidden><span>Viewing a past day. Meals you add go on this day.</span><button type="button" class="link" id="dayToday">Back to today</button></p>
+    <div class="card summary">
+      <div class="ring" aria-hidden="true"><svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="50"/><circle class="fill" id="ringFill" cx="60" cy="60" r="50"/></svg><div class="ringText"><b id="kcalLeft">–</b><span id="ringCap">net kcal</span></div></div>
+      <dl class="macros">
+        <div><dt>Eaten</dt><dd id="kcalEaten">0 kcal</dd></div>
+        <div><dt>Burned</dt><dd id="kcalBurned">0 kcal</dd></div>
+        <div><dt>Left</dt><dd id="kcalRemain">–</dd></div>
+        <div><dt>Goal</dt><dd><button type="button" class="link goalLink" id="kcalGoal">Set up</button></dd></div>
+      </dl>
+      <div class="mstrip" aria-label="Macros">
+        <div><b id="proteinEaten">0 g</b><span>Protein</span><i><u id="barP"></u></i></div>
+        <div><b id="carbsEaten">0 g</b><span>Carbs</span><i><u id="barC"></u></i></div>
+        <div><b id="fatEaten">0 g</b><span>Fat</span><i><u id="barF"></u></i></div>
+      </div>
+    </div>
+    <div class="card water">
+      <div class="sectionHead" style="padding:0 0 8px"><h2>Water</h2><span class="hint" id="waterTxt">0 / 2,500 ml</span></div>
+      <div class="wbar"><u id="waterBar"></u></div>
+      <div class="row wrap"><button type="button" data-water="250">+ 250 ml</button><button type="button" data-water="500">+ 500 ml</button><button type="button" class="link" data-water="-250">Undo 250</button></div>
+    </div>
+
+    <form class="card log" id="logForm" autocomplete="off">
+      <label for="mealText" class="label">Log a meal</label>
+      <div class="taWrap"><textarea id="mealText" rows="2" placeholder="What did you eat? Add size or brand if you know it."></textarea><button type="button" class="taClear" id="mealClear" aria-label="Clear" hidden>×</button></div>
+      <div class="photoPrev" id="photoPrev" hidden><img id="photoImg" alt="Meal photo preview"><button type="button" id="photoX" aria-label="Remove photo">×</button></div>
+      <div class="row">
+        <label class="photoBtn" for="mealPhoto"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photo</label>
+        <input id="mealPhoto" type="file" accept="image/*" hidden>
+        <span class="fileName" id="fileName"></span>
+        <select id="refObj" aria-label="Object in photo for scale">
+          <option value="">Scale: auto</option>
+          <option value="a credit card">Credit card</option>
+          <option value="a dinner plate (about 26 cm)">Dinner plate</option>
+          <option value="a standard fork">Fork</option>
+          <option value="the person's hand">Hand</option>
+        </select>
+      </div>
+      <div class="row">
+        <button type="button" class="link" id="manualBtn">Enter manually</button>
+        <span class="spacer"></span>
+        <button class="primary" type="submit" id="estimateBtn">Estimate</button>
+      </div>
+      <p class="status" id="logStatus" role="status"></p>
+    </form>
+
+    <div class="sectionHead"><h2 id="todayHead">Today</h2></div>
+    <ul class="list" id="historyList"></ul>
+    <p class="empty" id="historyEmpty">No meals logged this day.</p>
+  </section>
+
+  <!-- 2. Recipes -->
+  <section class="view" id="view-recipes" role="tabpanel" aria-labelledby="tab-recipes" hidden>
+    <div class="segs wide" role="group" aria-label="Recipes">
+      <button type="button" class="seg on" data-rtab="create">Create</button>
+      <button type="button" class="seg" data-rtab="saved">Saved <span id="savedCount"></span></button>
+    </div>
+
+    <div id="recCreate" class="view">
+      <details class="card prefs"><summary>Food preferences</summary>
+        <label class="check"><input type="checkbox" id="halalOnly" checked><span>Halal only (no pork, no alcohol)</span></label>
+        <textarea id="dietPrefs" rows="2" placeholder="e.g. no dairy, allergic to nuts, dislike mushrooms, I cook for 2"></textarea>
+        <p class="hint">Sent with every recipe request. Saved on this phone.</p>
+      </details>
+      <div class="chatBar"><select id="chatSel" aria-label="Chats"></select><button type="button" id="chatNew">+ New</button><button type="button" id="chatClearAll">Clear</button><button type="button" id="chatDel" class="link">Delete</button></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <div class="editBar" id="editBar" hidden><span>Editing your message. Sending replaces it and what came after.</span><button type="button" class="link" id="editCancel">Cancel</button></div>
+      <form class="composer" id="chatForm" autocomplete="off">
+        <div class="taWrap" style="flex:1;min-width:0"><textarea id="chatInput" rows="1" placeholder="Ask for a recipe…" aria-label="Message"></textarea><button type="button" class="taClear" id="chatX" aria-label="Clear message" hidden>×</button></div>
+        <button class="primary" type="submit" id="chatSend">Send</button>
+      </form>
+    </div>
+
+    <div id="recSaved" class="view" hidden>
+      <input id="recSearch" type="search" placeholder="Search saved recipes" aria-label="Search saved recipes">
+      <div class="row filters">
+        <div class="segs" role="group" aria-label="Filter">
+          <button type="button" class="seg on" data-rfilter="all">All</button>
+          <button type="button" class="seg" data-rfilter="fav">Favorites</button>
+          <button type="button" class="seg" data-rfilter="cooked">Cooked</button>
+        </div>
+        <span class="spacer"></span>
+        <select id="recSort" aria-label="Sort"><option value="new">Newest</option><option value="rating">Top rated</option><option value="cooks">Most cooked</option></select>
+      </div>
+      <button type="button" id="shopBtn" class="shopBtn">Shopping list <span id="shopCount"></span></button>
+      <div class="recGrid" id="recGrid"></div>
+      <p class="empty" id="recEmpty">No saved recipes yet. Create one and tap Save.</p>
+    </div>
+  </section>
+
+  <!-- 3. Nutrition -->
+  <section class="view" id="view-nutrition" role="tabpanel" aria-labelledby="tab-nutrition" hidden>
+    <div class="segs wide" role="group" aria-label="Nutrition">
+      <button type="button" class="seg on" data-ntab="over">Overview</button>
+      <button type="button" class="seg" data-ntab="ask">Ask</button>
+    </div>
+
+    <div id="nOver" class="view">
+      <div class="segs wide three" role="group" aria-label="Period">
+        <button type="button" class="seg" data-nper="7">7 days</button>
+        <button type="button" class="seg on" data-nper="14">14 days</button>
+        <button type="button" class="seg" data-nper="30">30 days</button>
+      </div>
+      <div class="card" id="nStats"></div>
+      <div class="card" id="nIntake" hidden></div>
+      <div id="nResult" class="nres"></div>
+    </div>
+
+    <div id="nAsk" class="view" hidden>
+      <div class="chat" id="nChat" aria-live="polite"></div>
+      <div class="chips" id="nChips"></div>
+      <form class="composer" id="nForm" autocomplete="off">
+        <textarea id="nInput" rows="1" placeholder="Ask about your nutrition…" aria-label="Question" maxlength="500"></textarea>
+        <button class="primary" type="submit" id="nSend">Ask</button>
+      </form>
+    </div>
+    <p class="hint nfoot">Estimated from the foods you logged, not from a blood test. Food you didn't log isn't counted. This is general information, not medical advice. If you are pregnant, on medication or have a health condition, ask a doctor or pharmacist before taking any supplement.</p>
+  </section>
+
+  <!-- 4. Gym -->
+  <section class="view" id="view-gym" role="tabpanel" aria-labelledby="tab-gym" hidden>
+    <div class="segs wide three" role="group" aria-label="Gym sections">
+      <button type="button" class="seg on" data-gsec="muscles">Muscles</button>
+      <button type="button" class="seg" data-gsec="plan">Plan</button>
+      <button type="button" class="seg" data-gsec="coach">Coach</button>
+    </div>
+    <div id="gMuscles" class="view">
+      <div class="segs wide" role="group" aria-label="Body side">
+        <button type="button" class="seg on" data-gside="front">Front</button>
+        <button type="button" class="seg" data-gside="back">Back</button>
+      </div>
+      <div class="gstage" id="gStage">
+        <svg id="gSvg" viewBox="0 0 724 1448" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Muscle map"></svg>
+        <div class="gLabel" id="gLabel" hidden></div>
+        <button type="button" class="gReset" id="gReset" hidden>All muscles</button>
+        <p class="gHint" id="gHint">Tap a muscle</p>
+      </div>
+      <div class="chips gchips" id="gChips" aria-label="Muscle groups"></div>
+      <div id="gPanel"></div>
+    </div>
+    <div id="gPlan" class="view" hidden></div>
+    <div id="gCoach" class="view" hidden></div>
+  </section>
+
+  <!-- 5. Insights -->
+  <section class="view" id="view-insights" role="tabpanel" aria-labelledby="tab-insights" hidden>
+    <div id="insBody" class="view"></div>
+    <input type="file" id="insFile" accept="application/json,.json" hidden>
+  </section>
+</main>
+
+<dialog id="recipeDlg">
+  <div class="sheet" id="recipeSheet"></div>
+</dialog>
+<dialog id="shopDlg">
+  <div class="sheet" id="shopSheet"></div>
+</dialog>
+<dialog id="gymDlg" aria-label="Exercise demo">
+  <div class="sheet gx" id="gymSheet"></div>
+</dialog>
+<dialog id="cookDlg" aria-label="Cooking mode">
+  <div class="sheet cook" id="cookSheet"></div>
+</dialog>
+
+<dialog id="settingsDlg">
+  <form method="dialog" class="sheet" id="settingsForm">
+    <div class="closeRow"><button type="button" class="link" id="closeSettings">Close</button></div>
+    <h2 style="margin:0">Account</h2>
+    <p class="hint" id="acctEmail" style="margin:0"></p>
+    <p class="status" id="syncStatus" role="status"></p>
+    <div class="row wrap"><button type="button" id="syncNow">Sync now</button></div>
+    <hr class="setHr"><h2 class="h2s">Daily backup</h2>
+    <p class="hint" style="margin:0">A copy of your data is saved automatically every day at 12:00 (Qatar time) and kept for 30 days. Restoring replaces your current data with that day's copy (your current data is saved first).</p>
+    <div id="backupList"></div>
+    <div class="row wrap"><button type="button" id="backupNow">Back up now</button></div>
+    <hr class="setHr"><h2 class="h2s">Preferences</h2>
+    <label for="regionBtn">Region for food data</label>
+    <button type="button" id="regionBtn" class="regionBtn" aria-haspopup="dialog"></button>
+    <button type="button" class="link left" id="editGoalsBtn">Edit profile and goals</button>
+    <p class="status" id="testStatus" role="status"></p>
+    <div class="row wrap"><button type="button" id="testConn">Test connection</button><button type="button" id="installBtn" hidden>Install the app</button></div>
+    <p class="hint" id="installHint" hidden></p>
+    <details class="acctMore"><summary>Password and account</summary>
+      <label for="pwOld">Current password</label><input id="pwOld" type="password" autocomplete="current-password">
+      <label for="pwNew">New password (8+ characters)</label><input id="pwNew" type="password" autocomplete="new-password" minlength="8">
+      <div class="row wrap"><button type="button" id="pwGo">Change password</button></div>
+      <p class="status" id="acctStatus" role="status"></p>
+      <button type="button" class="link left danger" id="delAcct">Delete my account and all its data…</button>
+    </details>
+    <div class="setFoot"><button type="button" class="link left danger" id="signOutBtn">Sign out</button><button type="submit" class="primary" id="saveSettings" value="save">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="mealDlg">
+  <form method="dialog" class="sheet" id="mealForm">
+    <h2 id="mealTitle">Check and save</h2>
+    <p class="hint" id="mealNote"></p>
+    <div id="mealItems"></div>
+    <div class="row wrap"><button type="button" class="link" id="addItem">+ Add item</button><span class="spacer"></span><div class="segs" id="scaleRow" aria-label="Portion size"></div></div>
+    <div class="total" id="mealTotal"></div>
+    <div class="row">
+      <button type="button" class="danger" id="deleteMeal" hidden>Delete</button>
+      <button type="button" class="link" id="editDesc" hidden>Edit description</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancelMeal">Cancel</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="regionDlg" aria-label="Choose your country">
+  <div class="sheet regionSheet">
+    <div class="closeRow"><button type="button" class="link" id="regionClose">Cancel</button></div>
+    <h2 style="margin:0" id="regionTitle">Region</h2>
+    <p class="hint" id="regionSub" style="margin:0" hidden>Food advice and product lookups use your country's foods and menus. You can change it later in Settings.</p>
+    <input id="regionSearch" type="search" placeholder="Search countries" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search countries">
+    <div id="regionList" class="regionList" role="listbox"></div>
+  </div>
+</dialog>
+
+<dialog id="goalsDlg">
+  <form method="dialog" class="sheet" id="goalsForm">
+    <h2 id="goalsTitle">Profile and goals</h2>
+    <p class="hint" id="goalsIntro">A few details give you a calorie and protein target. It is saved to your account, and you can change any number.</p>
+    <div class="grid2">
+      <label class="mini"><span>Sex (for the formula)</span><select id="gSex"><option value="male">Male</option><option value="female">Female</option></select></label>
+      <label class="mini"><span>Birthday <em id="gAgeNote" class="ageNote"></em></span><input id="gBirth" type="date" min="1920-01-01" autocomplete="bday"></label>
+      <label class="mini"><span>Height</span><input id="gHeight" inputmode="decimal" placeholder="cm"></label>
+      <label class="mini"><span>Weight</span><input id="gWeight" inputmode="decimal" placeholder="kg"></label>
+    </div>
+    <label class="mini"><span>Activity</span><select id="gActivity">
+      <option value="sedentary">Mostly sitting (desk day, few steps)</option>
+      <option value="light" selected>Light: some walking on a normal day</option>
+      <option value="moderate">Moderate: on your feet a lot</option>
+      <option value="very">Very active: physical job or lots of steps</option></select></label>
+    <p class="hint" style="margin:-2px 0 0">Your daily life only. Workouts you log in the Gym tab are added on top, so they are not counted twice.</p>
+    <label class="mini"><span>Goal</span><select id="gGoal">
+      <option value="lose">Lose weight (about 0.5 kg a week)</option>
+      <option value="slow">Lose slowly (about 0.25 kg a week)</option>
+      <option value="maintain" selected>Maintain weight</option>
+      <option value="gain">Build muscle (slow gain)</option></select></label>
+    <div class="preview" id="gPreview"></div>
+    <div class="grid2">
+      <label class="mini"><span>Daily calories (editable)</span><input id="gKcal" inputmode="numeric"></label>
+      <label class="mini"><span>Daily protein g (editable)</span><input id="gProtein" inputmode="numeric"></label>
+    </div>
+    <button type="button" class="link left" id="resetGoals">Reset to suggested</button>
+    <p class="hint">An estimate from a standard formula, not medical advice.</p>
+    <div class="row">
+      <button type="button" id="skipGoals">Skip for now</button>
+      <span class="spacer"></span>
+      <button type="button" id="closeGoals">Close</button>
+      <button type="submit" class="primary" id="saveGoals" disabled>Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="config.js"></script>
+<script src="countries.js"></script>
+<script src="db.js"></script>
+<script src="sync.js"></script>
+<script src="auth.js"></script>
+<script src="ai.js"></script>
+<script src="prompts.js"></script>
+<script src="lookup.js"></script>
+<script src="burn.js"></script>
+<script src="actions.js"></script>
+<script src="app.js"></script>
+<script src="goals.js"></script>
+<script src="today.js"></script>
+<script src="recipes.js"></script>
+<script src="nutrition.js"></script>
+<script src="insights.js"></script>
+<script src="gym-data.js"></script>
+<script src="gym-art.js"></script>
+<script src="gym-art-f.js"></script>
+<script src="rig-lat.js"></script>
+<script src="rig2.js"></script>
+<script src="rig2-a.js"></script>
+<script src="rig2-b.js"></script>
+<script src="rig2-c.js"></script>
+<script src="rig2-d.js"></script>
+<script src="rig2-e.js"></script>
+<script src="rig2-f.js"></script>
+<script src="rig2-g.js"></script>
+<script src="rig2-h.js"></script>
+<script src="rig2-i.js"></script>
+<script src="rig2-j.js"></script>
+<script src="gym.js"></script>
+<script src="gym-log.js"></script>
+<script src="gym-plan.js"></script>
+</body>
+</html>
