@@ -726,3 +726,8 @@ html.kb-open #gcForm textarea, html.kb-open #nForm textarea, html.kb-open #chatF
 #gCoach:not([hidden]), #nAsk:not([hidden]), #view-recipes { padding-bottom: var(--composerH); }
 .chips button { line-height: 1.25; }
 .chips button { height: auto; min-height: 36px; padding-top: 8px; padding-bottom: 8px; text-align: center; }
+
+/* the title, the tabs and each tab's own switch stay in view while typing (see composer.js) */
+:root { --vvtop: 0px; --topH: 90px; }
+header.top { transform: translateY(var(--vvtop)); }
+[aria-label="Nutrition"].segs, [aria-label="Gym sections"].segs, [aria-label="Recipes"].segs { position: sticky; top: calc(var(--topH) + 6px); z-index: 9; transform: translateY(var(--vvtop)); box-shadow: 0 -8px 0 var(--bg), 0 8px 0 var(--bg); }
