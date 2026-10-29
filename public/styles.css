@@ -711,3 +711,7 @@ button, .seg, summary, label.photoBtn { -webkit-user-select: none; user-select: 
 .acts ul { margin: 0; padding-left: 18px; } .acts li.skip { color: var(--muted); }
 .acts .link { margin-top: 8px; }
 .acts.undone { opacity: .6; } .acts.undone b { color: var(--muted); }
+
+/* fixed size: no zoom */
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+input, select, textarea { font-size: max(16px, 1em); }

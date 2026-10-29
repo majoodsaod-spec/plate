@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101113" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -297,6 +297,15 @@
   </form>
 </dialog>
 
+<script>
+/* no pinch zoom (double-tap zoom is off through CSS touch-action): the app is built for one fixed size (iOS ignores user-scalable, so the gestures are stopped here) */
+(function () {
+  var stop = function (e) { e.preventDefault(); };
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (n) { document.addEventListener(n, stop, { passive: false }); });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  document.addEventListener('wheel', function (e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+})();
+</script>
 <script src="config.js"></script>
 <script src="countries.js"></script>
 <script src="db.js"></script>
