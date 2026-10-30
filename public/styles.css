@@ -395,7 +395,7 @@ dialog#gymDlg { width: min(560px, 100vw); max-width: 100vw; }
 .gx-stage .halo { fill: var(--glow); stroke: var(--glow); stroke-width: 3; stroke-linejoin: round; filter: url(#glow); }
 .gx-stage .seam { fill: none; stroke: var(--seam); stroke-width: 1.3; stroke-linecap: round; }
 .gx-stage .eq, .gx-stage .eq2, .gx-stage .gbar { stroke: var(--seam); stroke-width: 2.2; stroke-linejoin: round; }
-.gx-stage .eq { fill: var(--eq); } .gx-stage .eq2 { fill: var(--eq2); } .gx-stage .gbar { fill: var(--bar); }
+.gx-stage .eq, .gx-stage .eqx { fill: var(--eq); } .gx-stage .eq2 { fill: var(--eq2); } .gx-stage .gbar { fill: var(--bar); }
 .gx-stage .shadow { fill: var(--shadow); }
 .gx-stage .cable { fill: none; stroke: var(--cable); stroke-width: 1.6; stroke-linecap: round; }
 .gx-track { position: relative; display: flex; gap: 3px; height: 8px; margin-bottom: 12px; }
@@ -749,3 +749,13 @@ html, body { overflow-x: hidden; overflow-x: clip; overscroll-behavior-x: none; 
 .gx-stage .ski { fill: var(--gbody); stroke: var(--card); stroke-width: 1.1px; stroke-linejoin: round; }
 .gx-stage .skm.f { fill: color-mix(in srgb, var(--gmus) 88%, #000); }
 .gx-stage { --m: var(--gbody); --mf: color-mix(in srgb, var(--gbody) 86%, #000); }
+
+/* machines: steel frames, dark upholstered pads, face shading (rig2.js solid()) */
+:root { --pad: #3d4046; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pad: #222428; } }
+:root[data-theme="dark"] { --pad: #222428; }
+.gx-stage .pad { fill: var(--pad); stroke: var(--pad); stroke-width: 3.2; stroke-linejoin: round; }
+.gx-stage .pad.padb { stroke: var(--seam); stroke-width: 4.6; paint-order: stroke; }
+.gx-stage .edge { fill: none; stroke: rgba(0,0,0,.18); stroke-width: .7; stroke-linejoin: round; }
+.gx-stage .stk { fill: color-mix(in srgb, var(--eq) 70%, #fff); stroke: var(--seam); stroke-width: 2.2; stroke-linejoin: round; }
+.gx-stage .stkl { fill: none; stroke: rgba(0,0,0,.32); stroke-width: .8; }

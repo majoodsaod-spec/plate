@@ -127,7 +127,7 @@
       return {
         H: [0, 50, 0], a: lerp(4, 1, p), barHands: true, sh: [0, lerp(0, 1.5, p)], leg: (s) => ({ A: [s * 16, ankleY(0), 40], pole: [0, 1, 0.1], pitch: 0 }),
         arm: (s) => ({ W: [s * 18, y, z], pole: [s * 0.6, -0.1, -1] }),
-        props: seat(-14, 14).concat([P.box('eq', -16, 16, 70, 124, 15, 23, 'back'), P.box('eq', -4, 4, 44, 70, 15, 23, 'back'), P.box('eq', -2, 2, y - 8, y + 4, z + 2, 72, 'back')]),
+        props: seat(-14, 14).concat([P.box('eq', -16, 16, 70, 124, 15, 23, 'back'), P.box('eq', -4, 4, 44, 70, 15, 23, 'back'), P.box('eq', -2, 2, y - 8, y + 4, z + 2, 72, 'back'), P.box('eq', -24, -19, 4, 160, 74, 82, 'back'), P.box('eq', 19, 24, 4, 160, 74, 82, 'back'), P.box('eq', -26, 26, 154, 160, 72, 84, 'back'), P.box('stk', -12, 12, 6, 52, 75, 81, 'back')]),
         hot: [['lats', H(0.9, e)], ['midback', H(0.9, e)], ['biceps', H(0.3, e)]],
       };
     },

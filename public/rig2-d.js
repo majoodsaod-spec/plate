@@ -97,11 +97,11 @@
         H: [0, 50, -8], a: -8, sh: [0, 0], barHands: false,
         leg: (s, hip) => { const K = add(hip, mul(dirYZ(88), LEN.THIGH)); return { K, A: add(K, mul(dirYZ(th), LEN.SHIN)), pitch: lerp(5, 25, p) }; },
         arm: (s) => ({ W: [s * 21, 54, -12], pole: [s * 0.3, -1, 0] }),
-        props: seat(-26, 6).concat([P.box('eq', -17, 17, 44, 118, -34, -26, 'back'), P.box('eq', -4, 4, 0, 40, 20, 26, 'back')]),
+        props: seat(-26, 6).concat([P.box('eq', -17, 17, 44, 118, -34, -26, 'back'), P.box('stk', -10, 10, 6, 50, -46, -38, 'back'), P.box('eq', -14, 14, 50, 120, -48, -36, 'back')]),
         hot: [['quads', H(1, e)]],
       };
     },
-    post: (sc, pose, J) => { const A = J.side[1].W, B = J.side[1]; const ank = B.ankle; return [P.cap('eq2', add(ank, [-18, 2.5, 7]), 3.4, add(ank, [18, 2.5, 7]), 3.4, 'near')]; },
+    post: (sc, pose, J) => { const B = J.side[1], ank = B.ankle, kn = B.knee, r = add(ank, [0, 2.5, 7]); return [P.cap('pad', add(r, [-17, 0, 0]), 3.6, add(r, [17, 0, 0]), 3.6, 'near'), P.cap('eq', [21, kn[1], kn[2]], 2, add(r, [19, 0, 0]), 2, 'near'), P.disc('eq2', [22, kn[1], kn[2]], 'x', 4.5, 2, 'near')]; },
   };
 
   /* ---------- lunges and one-leg work ---------- */
@@ -197,7 +197,7 @@
         hot: [['hamstrings', H(1, e)], ['calves', H(0.2, e)]],
       };
     },
-    post: (sc, pose, J) => { const a = J.side[1].ankle; return [P.cap('eq2', add(a, [-18, 3, -3]), 3.4, add(a, [18, 3, -3]), 3.4, 'near')]; },
+    post: (sc, pose, J) => { const B = J.side[1], a = B.ankle, kn = B.knee, r = add(a, [0, 3, -3]); return [P.cap('pad', add(r, [-17, 0, 0]), 3.6, add(r, [17, 0, 0]), 3.6, 'near'), P.cap('eq', [21, kn[1], kn[2]], 2, add(r, [19, 0, 0]), 2, 'near'), P.disc('eq2', [22, kn[1], kn[2]], 'x', 4.5, 2, 'near')]; },
   };
   S['seated-leg-curl'] = {
     phases: PH('Curl down', 'Return', { d: [1.3, 0.6, 2.0, 0.4], hold: 'Squeeze' }), cam: { S: 2.8, y0: 540 }, theta: -85, range: [-100, -20],
@@ -211,7 +211,7 @@
         hot: [['hamstrings', H(1, e)]],
       };
     },
-    post: (sc, pose, J) => { const ank = J.side[1].ankle; return [P.cap('eq2', add(ank, [-18, 5, -6]), 3.4, add(ank, [18, 5, -6]), 3.4, 'near')]; },
+    post: (sc, pose, J) => { const B = J.side[1], ank = B.ankle, kn = B.knee, r = add(ank, [0, 5, -6]); return [P.cap('pad', add(r, [-17, 0, 0]), 3.6, add(r, [17, 0, 0]), 3.6, 'near'), P.cap('eq', [21, kn[1], kn[2]], 2, add(r, [19, 0, 0]), 2, 'near'), P.disc('eq2', [22, kn[1], kn[2]], 'x', 4.5, 2, 'near')]; },
   };
   S['cable-leg-curl-standing'] = {
     phases: PH('Curl', 'Lower', { d: [1.3, 0.6, 2.0, 0.4], hold: 'Squeeze' }), cam: { S: 2.7, y0: 560, dx: 10 }, theta: -90, range: [-100, -20],

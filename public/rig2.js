@@ -63,8 +63,8 @@
 
   /* two bodies, same style: 'female' is a slimmer frame (narrower shoulders and waist, fuller hips, finer limbs, a smaller head) with hair and a ponytail */
   const BODIES = {
-    male: { sect: [[-0.1, 14.5, 10.0], [0.2, 14.8, 9.8], [0.4, 13.0, 9.0], [0.62, 17.0, 10.6], [0.82, 19.8, 11.2], [0.96, 18.4, 9.2], [1.07, 11.0, 6.6]], shW: 20, arm: 1, leg: 1, neck: 4.3, head: [8.2, 11.0, 9.8], foot: [1, 1], hair: false },
-    female: { sect: [[-0.1, 15.0, 9.4], [0.2, 15.8, 9.4], [0.4, 11.4, 7.8], [0.62, 14.2, 9.4], [0.82, 16.0, 10.2], [0.96, 14.8, 8.2], [1.07, 9.2, 5.8]], shW: 17.6, arm: 0.86, leg: 0.92, neck: 3.5, head: [7.5, 10.4, 9.2], foot: [0.94, 0.88], hair: true },
+    male: { sect: [[-0.1, 15.0, 9.0], [0.08, 16.2, 9.6], [0.2, 15.4, 9.8], [0.4, 13.0, 9.0], [0.62, 17.0, 10.6], [0.82, 19.8, 11.2], [0.96, 18.4, 9.2], [1.07, 11.0, 6.6]], shW: 20, arm: 1, leg: 1, neck: 5.1, head: [8.2, 11.0, 9.8], foot: [1, 1], hair: false },
+    female: { sect: [[-0.1, 15.4, 8.8], [0.08, 16.6, 9.3], [0.2, 16.0, 9.4], [0.4, 11.4, 7.8], [0.62, 14.2, 9.4], [0.82, 16.0, 10.2], [0.96, 14.8, 8.2], [1.07, 9.2, 5.8]], shW: 17.6, arm: 0.86, leg: 0.92, neck: 4.0, head: [7.5, 10.4, 9.2], foot: [0.94, 0.88], hair: true },
   };
   let BODY = BODIES.male, SECT = BODY.sect;
   const setBody = (k) => { BODY = BODIES[k] || BODIES.male; SECT = BODY.sect; };
@@ -81,6 +81,15 @@
     lowerback: { s: [0.04, 0.4], psi: () => [2.45, 3.14] },
     midback:   { s: [0.5, 0.84], psi: () => [2.3, 3.14] },
     traps:     { s: [0.78, 1.04], psi: () => [2.2, 3.14] },
+  };
+
+  /* ---------- limb shapes: stations along each bone with a radius and a sideways shift, so limbs have real muscle contours
+     (deltoid cap, biceps, forearm swell, quad sweep, a calf that bulges at the back) instead of plain tubes. [t, radius, forward, outward] ---------- */
+  const PROF = {
+    th: [[0, 8.6, 0, 0.3], [0.18, 8.7, 0.6, 0.6], [0.4, 8.0, 0.8, 0.7], [0.6, 7.1, 0.8, 0.5], [0.8, 6.2, 0.4, 0.1], [0.93, 5.8, 0.3, -0.2], [1, 5.6, 0.2, 0]],   // the mass sits to the outside (a gap between the thighs), tapering into the knee
+    sh: [[0, 5.6, 0.2, 0], [0.12, 5.6, -0.8, 0], [0.27, 6.0, -1.9, 0.1], [0.43, 5.2, -1.5, 0], [0.62, 4.1, -0.7, 0], [0.84, 3.4, -0.2, 0], [1, 3.2, 0, 0]],
+    ua: [[0, 6.0, 0, 0.8], [0.14, 6.2, 0.2, 1.0], [0.32, 5.0, 0.1, 0.4], [0.55, 5.0, 0.4, 0.1], [0.8, 4.4, 0.2, 0], [1, 4.1, 0, 0]],
+    fa: [[0, 4.1, 0, 0], [0.18, 4.7, 0.3, 0.5], [0.42, 4.1, 0.2, 0.2], [0.72, 3.3, 0, 0], [1, 2.9, 0, 0]],
   };
 
   /* ---------- props (declarative, so they follow the camera) ---------- */
@@ -150,6 +159,7 @@
     const cam = camera(theta, sc.cam), S = cam.S, C = cam.C, px = (q) => cam.proj(q);
     const cap = (a, ra, b, rb) => capsulePath(px(a), ra * S, px(b), rb * S);
     const near = dot(J.L, C) >= 0 ? 1 : -1, far = -near;
+    const farDark = Math.abs(dot(J.L, C)) > 0.35;              // the far side is shaded darker only when it really is farther (not when facing the camera head-on)
     const hot = sx.hot || [];
     let asst = false;   // the muscle asked for last is a helper (not the first one listed), so it glows yellow
     const hv = (m, sd) => (asst = hot.length > 0 && hot[0][0] !== m, hot).reduce((mx, h) => (h[0] === m && (h[2] == null || h[2] === sd || sd == null) ? Math.max(mx, h[1]) : mx), 0);
@@ -162,13 +172,15 @@
       return '<g>' + defs + items.map((i) => (i.noOl ? '' : `<path class="ol" d="${i.d}"/>`)).join('') + items.map((i) => `<path class="${i.cls} dk" d="${i.d}"/>`).join('') + lit + (extra || '') + '</g>';
     };
     /* the torso and both legs are drawn as ONE body: every outline first, then every fill in depth order, so there is no seam where the pelvis meets the thighs */
+    /* the torso and legs (and each arm) are drawn as ONE body: every outline first, then the parts in depth order in their plain colour with their
+       muscles, and last one soft shadow along the outer edge of the whole body, so there is no line or crescent where the thigh meets the hip */
     const groupSeq = (parts) => {
-      let defs = '', body = '', ol = '';
-      parts.forEach((pt) => pt.items.forEach((i) => { i.id = 'k' + (++clipN); defs += `<clipPath id="${i.id}"><path d="${i.d}"/></clipPath>`; ol += `<path class="ol" d="${i.d}"/>`; }));
-      parts.forEach((pt) => {
-        body += pt.items.map((i) => `<path class="${i.cls} dk" d="${i.d}"/>`).join('') + pt.items.map((i) => i.nolit ? '' : `<g clip-path="url(#${i.id})"><path class="${i.cls} lit" transform="translate(-${off} -${off})" d="${i.d}"/></g>`).join('') + (pt.hl || '');
-      });
-      return '<g>' + defs + ol + body + '</g>';
+      let ol = '', body = '', all = '';
+      parts.forEach((pt) => pt.items.forEach((i) => { ol += `<path class="ol" d="${i.d}"/>`; all += `<path d="${i.d}"/>`; }));
+      parts.forEach((pt) => { body += pt.items.map((i) => `<path class="${i.cls}" d="${i.d}"/>`).join('') + (pt.hl || ''); });
+      const id = 'k' + (++clipN), sh = parts.map((pt) => pt.items.map((i) => `<path class="${i.cls} dk" d="${i.d}"/>`).join('')).join('');
+      const defs = `<mask id="${id}" maskUnits="userSpaceOnUse" x="-2000" y="-2000" width="5000" height="5000"><g fill="#fff">${all}</g><g fill="#000" transform="translate(-${off} -${off})">${all}</g></mask>`;
+      return '<g>' + defs + ol + body + `<g mask="url(#${id})" style="opacity:.9">${sh}</g>` + '</g>';
     };
     const chain = (pts, radii, cls) => pts.slice(0, -1).map((q, i) => ({ d: cap(q, radii[i], pts[i + 1], radii[i + 1]), cls }));
     const glow = (d, v) => { const c = asst ? ' as' : ''; return `<path class="halo${c}" style="opacity:${(0.15 + 0.75 * v).toFixed(2)}" d="${d}"/><path class="h1${c}" style="opacity:${(0.1 + 0.78 * v).toFixed(2)}" d="${d}"/>`; };
@@ -191,6 +203,8 @@
        outline that runs round the side stops at the silhouette edge. The glow for a worked muscle uses the same outlines. ----- */
     const SK = root.Rig2Detail !== false && root.RigSkin ? root.RigSkin[BODY === BODIES.female ? 'female' : 'male'] : null;
     const clampN = (x) => Math.max(-1, Math.min(1, x));
+    /* the male artwork starts its thigh muscles a little below the groin crease; pull the top of the front of the thigh up to meet it, as the female artwork already does */
+    if (SK && BODY !== BODIES.female && !SK.__thUp) { SK.__thUp = 1; SK.forEach((r) => { if (r.b === 'th' && r.v === 'f') r.p = r.p.map(([t, x]) => [t < 0.6 ? t - 0.2 * (1 - t / 0.6) : t, x]); }); }
     /* across the artwork (-1..1, edge to edge) -> angle round the body. Half way between a true orthographic unwrap (exact from the front)
        and an even spread (so the sides, seen side-on, still show their muscles instead of thin slivers) */
     const wrapA = (x) => { x = clampN(x); return 0.3 * Math.asin(x) + 0.7 * x * Math.PI / 2; };
@@ -214,10 +228,9 @@
     };
     const limbFrame = (b, k) => {
       const L = BODY.leg, A = BODY.arm;
-      const f = b === 'th' ? { A: k.hip, B: k.knee, rs: [9.0 * L, 8.4 * L, 6.2 * L], ts: [0, 0.4, 1], F: mul(sub(k.ankle, k.knee), -1) }
-        : b === 'sh' ? { A: k.knee, B: k.ankle, rs: [6.2 * L, 5.5 * L, 3.4 * L], ts: [0, 0.3, 1], F: k.ff || J.zax }
-        : b === 'ua' ? { A: k.S, B: k.E, rs: [6.2 * A, 5.7 * A, 4.4 * A], ts: [0, 0.35, 1], F: sub(k.W, k.E) }
-        : { A: k.E, B: k.W, rs: [4.4 * A, 4.7 * A, 3.0 * A], ts: [0, 0.25, 1], F: sub(k.S, k.E) };
+      const sc = b === 'th' || b === 'sh' ? L : A, pr = PROF[b];
+      const f = b === 'th' ? { A: k.hip, B: k.knee, F: mul(sub(k.ankle, k.knee), -1) } : b === 'sh' ? { A: k.knee, B: k.ankle, F: k.ff || J.zax } : b === 'ua' ? { A: k.S, B: k.E, F: sub(k.W, k.E) } : { A: k.E, B: k.W, F: sub(k.S, k.E) };
+      f.ts = pr.map((q) => q[0]); f.rs = pr.map((q) => q[1] * sc);
       f.ax = norm(sub(f.B, f.A)); f.len = Math.hypot(...sub(f.B, f.A)); f.u = sideDir(f.A, f.B, f.F); let w = norm(cross3(f.ax, f.u)); if (dot(w, J.L) < 0) w = mul(w, -1); f.w = w;
       f.cu = dot(f.u, C); f.cl = dot(f.w, C); f.ph0 = Math.atan2(-f.cu, f.cl);
       return f;
@@ -243,7 +256,7 @@
           const r = radAt(f.rs, f.ts, tt) * 1.01;
           pts.push(px(add(along(f.A, f.B, tt), mul(nrm(ph), r))));
         }
-        const svg = skinDraw(rec, pts, vs, s === far);
+        const svg = skinDraw(rec, pts, vs, s === far && farDark);
         out += svg;
       }
       return out;
@@ -258,7 +271,7 @@
         if (rec.g === 'glutes') {                 // the glutes are laid on the back of the pelvis volume, seen straight from behind
           for (const [s0, xn] of rec.p) {
             let lx = xn * sectDim(Math.max(-0.1, Math.min(1.07, s0)), 1) * (rec.v === 'b' ? -1 : 1), ly = LEN.TORSO * s0 + 3;
-            let qx = lx / PELV.r[0], qy = ly / PELV.r[1]; const qq = qx * qx + qy * qy; if (qq > 0.8) { const k = Math.sqrt(0.8 / qq); qx *= k; qy *= k; }   // stay on the back of the pelvis
+            let qx = lx / PELV.r[0], qy = (ly - 2.5) / PELV.r[1]; const qq = qx * qx + qy * qy; if (qq > 0.8) { const k = Math.sqrt(0.8 / qq); qx *= k; qy *= k; }   // stay on the back of the pelvis
             const qz = -Math.sqrt(Math.max(0, 1 - qx * qx - qy * qy));
             const P = add(PELV.c, add(add(mul(J.L, qx * PELV.r[0] * 1.015), mul(J.u, qy * PELV.r[1] * 1.015)), mul(J.zax, qz * PELV.r[2] * 1.015)));
             const n = norm(add(add(mul(J.L, qx / PELV.r[0]), mul(J.u, qy / PELV.r[1])), mul(J.zax, qz / PELV.r[2])));
@@ -284,6 +297,51 @@
     };
     const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     /* ----- props ----- */
+    /* ----- solid kit (frames, uprights, pads, plates): a box drawn with its visible faces lit differently (top lightest, the side away from the light darkest)
+       so machines read as solid objects. Thin flat boxes off the floor are upholstered pads: dark, with rounded corners. ----- */
+    const LIGHT = norm(add(add(mul(cam.R, -0.55), [0, 0.8, 0]), mul(C, 0.35)));
+    const matOf = (q) => {
+      if (q.cls !== 'eq' && q.cls !== 'eqd') return q.cls;
+      let lo, hi;
+      if (q.t === 'box') { lo = [q.b[0], q.b[2], q.b[4]]; hi = [q.b[1], q.b[3], q.b[5]]; }
+      else { const dims = [2 * q.w, Math.hypot(...sub(q.b, q.a)), q.th].sort((a, b) => a - b); return dims[0] <= 9 && dims[1] >= 14 && Math.min(q.a[1], q.b[1]) > 8 && Math.max(q.a[1], q.b[1]) < 150 ? 'pad' : q.cls; }
+      const dm = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]].sort((a, b) => a - b);
+      return dm[0] <= 9 && dm[1] >= 14 && lo[1] > 8 && hi[1] < 150 ? 'pad' : q.cls;      // (high crossbars are steel, not upholstery)
+    };
+    /* corners in bit order (x, y, z: 0/1 as in the loops above); faces as corner lists */
+    const FACES = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    const solid = (P8, cls) => {
+      const ctr = P8.reduce((a, p) => add(a, mul(p, 1 / 8)), [0, 0, 0]), vdir = add(mul(C, cam.cp), mul([0, 1, 0], cam.sp));
+      const pad = cls === 'pad';
+      let o = `<path class="${cls}${pad ? ' padb' : ''}" d="${poly(hull(P8.map(px)))}"/>`;
+      for (const f of FACES) {
+        const fc = f.reduce((a, i) => add(a, mul(P8[i], 0.25)), [0, 0, 0]); let n = sub(fc, ctr); const nl = Math.hypot(...n); if (nl < 1e-6) continue; n = mul(n, 1 / nl);
+        const vis = dot(n, vdir); if (vis < 0.04) continue;
+        const pts = f.map((i) => px(P8[i])), lit = dot(n, LIGHT);
+        const sh = lit > 0.35 ? `<path class="hlf" style="opacity:${Math.min(0.9, (lit - 0.2) * (pad ? 0.6 : 0.9)).toFixed(2)}" d="${poly(pts)}"/>` : lit < 0 ? `<path class="hlr" style="opacity:${Math.min(1, -lit * 1.6 + 0.3).toFixed(2)}" d="${poly(pts)}"/>` : '';
+        o += sh + (pad ? '' : `<path class="edge" d="${poly(pts)}"/>`);
+        if (cls === 'stk' && Math.abs(n[1]) < 0.5) {                     // a weight stack: a line between every plate
+          const ed = []; for (const i of f) if (!(i & 2)) ed.push([P8[i], P8[i | 2]]);
+          if (ed.length === 2) { const nPl = Math.max(4, Math.round(Math.abs(ed[0][1][1] - ed[0][0][1]) / 3.4)); let dl = ''; for (let k = 1; k < nPl; k++) { const u = k / nPl; dl += 'M' + fx(px(along(ed[0][0], ed[0][1], u))) + 'L' + fx(px(along(ed[1][0], ed[1][1], u))); } o += `<path class="stkl" d="${dl}"/>`; }
+        }
+      }
+      return o;
+    };
+    /* a cable tower built inside a column's footprint: two uprights, a top bar, a base, and a weight stack on guide rods between the uprights */
+    const boxSvg = (b, cls) => { const P8 = []; for (const x of [b[0], b[1]]) for (const y of [b[2], b[3]]) for (const z of [b[4], b[5]]) P8.push([x, y, z]); return solid(P8, cls); };
+    const towerOf = (b) => {
+      const [x0, x1, y0, y1, z0, z1] = b, wideX = x1 - x0 >= z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, half = wideX ? (x1 - x0) / 2 : (z1 - z0) / 2, th = Math.min(4, (wideX ? z1 - z0 : x1 - x0) / 2);
+      const bx = (a0, a1, yA, yB, t) => (wideX ? [cx + a0, cx + a1, yA, yB, cz - t, cz + t] : [cx - t, cx + t, yA, yB, cz + a0, cz + a1]);
+      const pt = (a, y) => (wideX ? [cx + a, y, cz] : [cx, y, cz + a]);
+      const up = Math.min(5, half * 0.28), sw = Math.max(5, half - up - 4), sh = Math.min(52, (y1 - y0) * 0.26);
+      let o = boxSvg(bx(-half - 2, half + 2, 0, Math.min(4, y0 + 4), th + 6), 'eq');
+      o += boxSvg(bx(-half, -half + up, y0, y1, th), 'eq') + boxSvg(bx(half - up, half, y0, y1, th), 'eq');
+      for (const a of [-sw * 0.7, sw * 0.7]) { const A = px(pt(a, y0 + 2)), B = px(pt(a, y1 - 6)); o += `<path class="cable" style="stroke-width:1.2" d="M${fx(A)}L${fx(B)}"/>`; }
+      o += boxSvg(bx(-sw, sw, y0 + 2, y0 + 2 + sh, th * 0.8), 'stk') + boxSvg(bx(-sw, sw, y0 + 2 + sh, y0 + 6 + sh, th * 0.8), 'eq2');
+      { const A = px(pt(0, y0 + 6 + sh)), B = px(pt(0, y0 + sh + 70)); o += `<path class="cable" style="stroke-width:1.8" d="M${fx(A)}L${fx(B)}"/>`; }
+      o += boxSvg(bx(-half, half, y1 - 6, y1, th + 1), 'eq');
+      return o;
+    };
     const drawProp = (q) => {
       if (q.t === 'cap') {
         const base = `<path class="${q.cls}" d="${cap(q.a, q.ra, q.b, q.rb)}"/>`;
@@ -293,7 +351,11 @@
         const k = 0.42 * r, e1 = r * 0.7 / L, a1 = [p1[0] + dx * e1 + nx * k, p1[1] + dy * e1 + ny * k], b1 = [p2[0] - dx * e1 + nx * k, p2[1] - dy * e1 + ny * k];
         return base + `<path class="hl" style="stroke-width:${(0.36 * r).toFixed(1)}px" d="M${fx(a1)}L${fx(b1)}"/>`;
       }
-      if (q.t === 'box') { const [x0, x1, y0, y1, z0, z1] = q.b, pts = []; for (const x of [x0, x1]) for (const y of [y0, y1]) for (const z of [z0, z1]) pts.push(px([x, y, z])); return `<path class="${q.cls}" d="${poly(hull(pts))}"/>`; }
+      if (q.t === 'box') {
+        const [x0, x1, y0, y1, z0, z1] = q.b, dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+        if ((q.cls === 'eq' || q.cls === 'eqd') && dy >= 110 && Math.min(dx, dz) >= 6 && Math.max(dx, dz) >= 14 && Math.max(dx, dz) <= 60 && y0 < 20) return towerOf(q.b);   // a solid column is drawn as a real cable tower
+        const P8 = []; for (const x of [x0, x1]) for (const y of [y0, y1]) for (const z of [z0, z1]) P8.push([x, y, z]); return solid(P8, matOf(q));
+      }
       if (q.t === 'disc') {
         const pts = [], ax = Array.isArray(q.axis) ? norm(q.axis) : q.axis === 'x' ? [1, 0, 0] : q.axis === 'y' ? [0, 1, 0] : [0, 0, 1];
         let e1 = q.axis === 'x' ? [0, 1, 0] : [1, 0, 0], e2 = q.axis === 'z' ? [0, 1, 0] : [0, 0, 1];
@@ -308,9 +370,9 @@
         return `<path class="${q.cls}" d="${poly(hull(pts))}"/>` + face;
       }
       if (q.t === 'slab') {
-        const d = norm(sub(q.b, q.a)), nr = [0, -d[2], d[1]], pts = [];
-        for (const x of [-q.w, q.w]) for (const e2 of [q.a, q.b]) for (const sg of [-1, 1]) pts.push(px(add(add(e2, mul(nr, sg * q.th / 2)), [x, 0, 0])));
-        return `<path class="${q.cls}" d="${poly(hull(pts))}"/>`;
+        const d = norm(sub(q.b, q.a)), nr = [0, -d[2], d[1]], P8 = [];
+        for (const x of [-q.w, q.w]) for (const e2 of [q.a, q.b]) for (const sg of [-1, 1]) P8.push(add(add(e2, mul(nr, sg * q.th / 2)), [x, 0, 0]));
+        return solid(P8, matOf(q));
       }
       if (q.t === 'line') return `<path class="cable" d="M${fx(px(q.a))}L${fx(px(q.b))}"/>`;
       if (q.t === 'ball') {
@@ -346,9 +408,32 @@
     const props = (layer) => (sx.props || []).filter((q) => q.layer === layer && !isImpl(q) && !(layer === 'back' && autoSort(q))).map(drawProp).join('');
 
     /* ----- body parts ----- */
+    const limbItems = (b, A, B, F, s, scl, c) => {
+      const ax = norm(sub(B, A)), fw = sideDir(A, B, F); let ow = norm(cross3(ax, fw)); if (dot(ow, mul(J.L, s)) < 0) ow = mul(ow, -1);
+      const pts = PROF[b].map(([t, , f, o]) => add(along(A, B, t), add(mul(fw, f * scl), mul(ow, o * scl))));
+      const out = chain(pts, PROF[b].map((q) => q[1] * scl), c);
+      if (b === 'th') {
+        /* the root of the thigh: no ball on top. Real legs start at the groin crease, flat across the inside and the front, and the hip
+           joint is buried in the pelvis; only the outside rounds over the top of the femur. So the first piece is the thigh's own cross
+           sections from the joint down, plus a rounded quarter on the outer side only. */
+        const r0 = PROF.th[0][1] * scl, r1 = PROF.th[1][1] * scl, P3 = [];
+        const ring = (c, r, n) => { for (let i = 0; i < n; i++) { const g = 2 * Math.PI * i / n; P3.push(add(c, add(mul(fw, r * Math.cos(g)), mul(ow, r * Math.sin(g))))); } };
+        /* the groin crease runs diagonally: high on the outside of the hip, low on the inside, where the thigh meets the crotch */
+        const D = 0.2 * LEN.THIGH * scl;
+        for (let i = 0; i < 32; i++) { const g = 2 * Math.PI * i / 32, so = Math.sin(g), co = Math.cos(g), dd = D * 0.5 * (1 - so) * (co < 0 ? 0.55 : 1);
+          P3.push(add(add(pts[0], mul(ax, dd)), add(mul(fw, r0 * co), mul(ow, r0 * so)))); }
+        ring(pts[1], r1, 24);
+        for (let i = 1; i <= 4; i++) { const a = (Math.PI / 2) * i / 5; for (let j = -6; j <= 6; j++) { const g = Math.PI / 2 + (Math.PI / 2.4) * j / 6;
+          const dir = add(mul(ax, -Math.sin(a)), mul(add(mul(fw, Math.cos(g)), mul(ow, Math.sin(g))), Math.cos(a)));
+          if (Math.sin(g) > 0.35) P3.push(add(pts[0], add(mul(ax, -r0 * 0.12 * Math.sin(a)), mul(add(mul(fw, Math.cos(g)), mul(ow, Math.sin(g))), r0 * Math.cos(a))))); } }
+        out[0] = { d: poly(hull(P3.map(px))), cls: c };
+      }
+      return out;
+    };
     const legParts = (s) => {
-      const k = J.side[s], c = s === far ? 'm f' : 'm';
-      const items = chain([k.hip, along(k.hip, k.knee, 0.4), k.knee, along(k.knee, k.ankle, 0.3), k.ankle], [9.0, 8.4, 6.2, 5.5, 3.4].map((r) => r * BODY.leg), c);
+      const k = J.side[s], c = s === far && farDark ? 'm f' : 'm';
+      const thI = limbItems('th', k.hip, k.knee, mul(sub(k.ankle, k.knee), -1), s, BODY.leg, c), shI = limbItems('sh', k.knee, k.ankle, k.ff || J.zax, s, BODY.leg, c);
+      const items = thI.concat(shI), nTh = thI.length;
       const fs = BODY.foot, sp = (x, y, w) => px(add(add(add(k.ankle, mul(k.ff, x * fs[0])), mul(k.dn, y)), mul(J.L, w * fs[1])));
       /* a sneaker: stations from heel to toe give the height of the upper, the width, and the toe spring of the sole */
       const SX = [-8.6, -8.0, -6.2, -3.0, 0.5, 4.5, 8.0, 11.5, 14.5, 17.0, 18.7, 19.5];
@@ -375,7 +460,7 @@
       items.push({ d: uni(stOut), cls: 'm sole' });
       }
       let hl = '';
-      if (SK) return { split: true, thigh: { items: items.slice(0, 2), hl: skinLimb(['th'], s) }, shin: { items: items.slice(2), hl: skinLimb(['sh'], s) } };   // two parts, so a thigh pointing at the camera is layered by its own depth
+      if (SK) return { split: true, thigh: { items: items.slice(0, nTh), hl: skinLimb(['th'], s) }, shin: { items: items.slice(nTh), hl: skinLimb(['sh'], s) } };   // two parts, so a thigh pointing at the camera is layered by its own depth
       const thF = sideDir(k.hip, k.knee, mul(sub(k.ankle, k.knee), -1)), thB = mul(thF, -1);
       hl += belly(k.hip, k.knee, 0.1, 0.9, 5.6, 2.4, thF, hv('quads', s));
       hl += belly(k.hip, k.knee, 0.1, 0.9, 5.2, 2.4, thB, hv('hamstrings', s));
@@ -385,11 +470,11 @@
       { const vis = dot(mul(J.zax, -1), C), fd = 0.35 + 0.65 * Math.max(0, Math.min(1, (vis + 0.25) / 0.7)); hl += ballHL(gc, 6.2, hv('glutes', s) * fd); }
       hl += ballHL(add(add(add(J.H, mul(J.zax, -3)), mul(J.u, 2)), mul(J.L, s * 8)), 5.2, hv('abductors', s));
       const hlS = belly(k.knee, k.ankle, 0.06, 0.62, 3.9, 1.5, mul(sideDir(k.knee, k.ankle, J.zax), -1), hv('calves', s));
-      return { split: true, thigh: { items: items.slice(0, 2), hl: hl.replace(hlS, '') }, shin: { items: items.slice(2), hl: hlS } };
+      return { split: true, thigh: { items: items.slice(0, nTh), hl: hl.replace(hlS, '') }, shin: { items: items.slice(nTh), hl: hlS } };
     };
     const arm = (s) => {
-      const k = J.side[s], c = s === far ? 'm f' : 'm';
-      const items = chain([k.S, along(k.S, k.E, 0.35), k.E, along(k.E, k.W, 0.25), k.W], [6.2, 5.7, 4.4, 4.7, 3.0].map((r) => r * BODY.arm), c);
+      const k = J.side[s], c = s === far && farDark ? 'm f' : 'm';
+      const uaI = limbItems('ua', k.S, k.E, sub(k.W, k.E), s, BODY.arm, c), faI = limbItems('fa', k.E, k.W, sub(k.S, k.E), s, BODY.arm, c);
       let hu = '', hf = '';
       if (SK) { hu = skinLimb(['ua'], s); hf = skinLimb(['fa'], s); }
       else {
@@ -399,7 +484,7 @@
         hu += ballHL(add(add(k.S, mul(J.u, 1)), mul(J.L, s * 1.2)), 5.0, hv('shoulders', s));
         hf += belly(k.E, k.W, 0.1, 0.78, 2.7, 0.9, sideDir(k.E, k.W, sub(k.S, k.E)), hv('forearms', s));
       }
-      return { ua: { items: items.slice(0, 2), hl: hu }, fa: { items: items.slice(2), hl: hf } };
+      return { ua: { items: uaI, hl: hu }, fa: { items: faI, hl: hf } };
     };
     /* ----- hands: a palm, four fingers and a thumb. They close around the bar or handle when gripping, lie flat on the floor when pressing, and hang relaxed otherwise ----- */
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -419,7 +504,7 @@
       return best;
     };
     const hand = (s) => {
-      const k = J.side[s], c = s === far ? 'm f' : 'm';
+      const k = J.side[s], c = s === far && farDark ? 'm f' : 'm';
       let d = norm(sub(k.Hd || k.W, k.Hd ? k.W : k.E));
       const g = grabbed(k.W), up = [0, 1, 0];
       let O, a, m, mode;
@@ -504,7 +589,7 @@
       }
       return Ls.length < 3 ? '' : glow(poly(Ls.concat(Rs.reverse())), v);
     };
-    const PELV = { c: add(add(J.H, mul(J.u, -3)), mul(J.zax, -2.2)), r: [SECT[0][1] * 1.02, 10.5, SECT[0][2] * 1.08] };
+    const PELV = { c: add(add(J.H, mul(J.u, -0.5)), mul(J.zax, -4)), r: [sectDim(0.2, 1) * 0.92, 7.8, sectDim(0.2, 2) * 0.88] };   // sits behind the hip joints: it is the seat and the back of the hips, not a block between the legs
     const torsoHL = SK ? skinTorso() : Object.keys(PATCH).map((n) => (hv(n) > 0.001 ? patch(n, far, hv(n)) + patch(n, near, hv(n)) : '')).join('');
     const secPts = (s, wx, wz) => {
       const c = add(J.H, mul(J.u, LEN.TORSO * s)), pts = [];
@@ -517,8 +602,17 @@
     /* the pelvis and buttocks: one rounded volume that turns with the torso, so the hips stay round when the thighs fold up (squats, sitting, lunges) */
     { const pts = []; for (let i = 0; i <= 8; i++) { const al = Math.PI * i / 8; for (let j = 0; j < 16; j++) { const be = 2 * Math.PI * j / 16; pts.push(px(add(PELV.c, add(add(mul(J.L, PELV.r[0] * Math.sin(al) * Math.cos(be)), mul(J.u, PELV.r[1] * Math.cos(al))), mul(J.zax, PELV.r[2] * Math.sin(al) * Math.sin(be)))))); } }
       torsoItems.push({ d: poly(hull(pts)), cls: 'm' }); }
+    { /* the groin: the bottom of the trunk between the thighs, a V down to the crotch (the thighs cover its sides) */
+      const pts = [], hl = J.side[-1].hip, hr = J.side[1].hip, cr = add(J.H, mul(J.u, -0.2 * LEN.THIGH * BODY.leg - 1.5));
+      for (const zz of [-5.5, 0, 5.5]) { pts.push(px(add(add(hl, mul(J.u, 3)), mul(J.zax, zz))), px(add(add(hr, mul(J.u, 3)), mul(J.zax, zz))), px(add(cr, mul(J.zax, zz * 0.6)))); }
+      torsoItems.push({ d: poly(hull(pts)), cls: 'm' }); }
     const neckTop = sub(J.head, add(mul(J.u, 5), mul(J.zax, 1)));
     torsoItems.push({ d: cap(add(add(J.T, mul(J.u, 1)), mul(J.zax, 1.5)), 5.0, neckTop, BODY.neck), cls: 'm' });
+    { /* the trapezius: the slope from the neck down to each shoulder */
+      const ring = (c, r) => { const o = []; for (let i = 0; i < 12; i++) { const g = i * Math.PI / 6; o.push(px(add(c, add(mul(J.L, r * Math.cos(g)), mul(J.u, r * Math.sin(g)))))); o.push(px(add(c, add(mul(J.zax, r * Math.cos(g)), mul(J.u, r * Math.sin(g)))))); } return o; };
+      const nb = add(add(J.T, mul(J.u, 2.5)), mul(J.zax, -0.5));
+      for (const sd of [-1, 1]) { const k = J.side[sd]; torsoItems.push({ d: poly(hull(ring(nb, BODY.neck * 1.05).concat(ring(add(add(k.S, mul(J.u, 2.2)), mul(J.zax, -1.2)), 3.4 * BODY.arm)))), cls: 'm' }); }
+    }
     const torsoParts = { items: torsoItems, hl: torsoHL };
 
     /* ----- head: faceless ----- */
@@ -640,7 +734,7 @@
       const Lg = BODY.leg, Ar = BODY.arm;
       for (const sd of [far, near]) {
         const x = sd === far ? 'F' : 'N', k = J.side[sd];
-        pc('th' + x, k.hip, along(k.hip, k.knee, 0.4), 8.7 * Lg); pc('th' + x, along(k.hip, k.knee, 0.4), k.knee, 7.3 * Lg);
+        pc('th' + x, along(k.hip, k.knee, 0.16), along(k.hip, k.knee, 0.4), 8.4 * Lg);   // the top of the thigh is inside the pelvis: the hips cover it unless the thigh comes up toward the camera pc('th' + x, along(k.hip, k.knee, 0.4), k.knee, 7.3 * Lg);
         pc('sh' + x, k.knee, along(k.knee, k.ankle, 0.3), 5.85 * Lg); pc('sh' + x, along(k.knee, k.ankle, 0.3), k.ankle, 4.45 * Lg);
         if (k.ff) pc('sh' + x, add(k.ankle, add(mul(k.ff, -5), mul(k.dn || [0, -1, 0], 3))), add(k.ankle, add(mul(k.ff, 16 * BODY.foot[0]), mul(k.dn || [0, -1, 0], 5))), 3.4);
         pc('ua' + x, k.S, along(k.S, k.E, 0.35), 5.95 * Ar); pc('ua' + x, along(k.S, k.E, 0.35), k.E, 5.05 * Ar);
@@ -648,7 +742,8 @@
       }
       for (let i = 0; i < SECT.length - 1; i++) {
         const a0 = SECT[i], a1 = SECT[i + 1], sm = (a0[0] + a1[0]) / 2;
-        pe('to', add(J.H, mul(J.u, LEN.TORSO * sm)), [J.L, J.u, J.zax], [(a0[1] + a1[1]) / 2, LEN.TORSO * (a1[0] - a0[0]) * 0.62 + 1.5, (a0[2] + a1[2]) / 2]);
+        if (sm < 0.05) continue;   // the bottom of the trunk is the hips: in the stand-ins the thighs and the pelvis volume carry it, so a thigh coming forward is never voted behind the belly
+        pe('to', add(J.H, mul(J.u, LEN.TORSO * sm)), [J.L, J.u, J.zax], [Math.min((a0[1] + a1[1]) / 2, sm < 0.2 ? 13 : 99), LEN.TORSO * (a1[0] - a0[0]) * 0.62 + 1.5, (a0[2] + a1[2]) / 2]);
       }
       pc('to', add(add(J.T, mul(J.u, 1)), mul(J.zax, 1.5)), sub(J.head, add(mul(J.u, 5), mul(J.zax, 1))), BODY.neck);
       pe('to', PELV.c, [J.L, J.u, J.zax], PELV.r);
@@ -1037,8 +1132,8 @@
         leg: (s) => ({ A: [s * 12, 34, 82], pole: [0, 1, 0.1], pitch: -8 }),
         arm: (s) => ({ W: [s * 9, W[1], W[2]], pole: [s * 0.4, -0.2, -1] }),
         props: [P.box('eq', -17, 17, 36, 41, -20, 16, 'back'), P.box('eq', -5, 5, 0, 36, -10, 6, 'back'), P.box('eq', -22, 22, 14, 50, 88, 94, 'back'), P.box('eq', -22, 22, 0, 6, -30, 110, 'back'),
-          P.box('eq', -22, 22, 6, 120, 118, 130, 'back'), P.ball('eq2', [0, 52, 120], 5, 'back'),
-          P.line('cable', [0, 52, 120], [0, W[1], W[2]], 'back'), P.cap('gbar', [-9, W[1], W[2]], 1.5, [9, W[1], W[2]], 1.5, 'near')],
+          P.box('eq', -24, -19, 6, 150, 120, 128, 'back'), P.box('eq', 19, 24, 6, 150, 120, 128, 'back'), P.box('eq', -24, 24, 144, 150, 120, 128, 'back'), P.box('stk', -12, 12, 6, 54, 121, 127, 'back'), P.box('eq2', -12, 12, 54, 58, 121, 127, 'back'), P.cap('gbar', [-8, 58, 124], 0.8, [-8, 144, 124], 0.8, 'back'), P.cap('gbar', [8, 58, 124], 0.8, [8, 144, 124], 0.8, 'back'), P.disc('eq2', [0, 52, 118], 'x', 5, 2.4, 'back'),
+          P.line('cable', [0, 52, 118], [0, W[1], W[2]], 'back'), P.cap('gbar', [-9, W[1], W[2]], 1.5, [9, W[1], W[2]], 1.5, 'near')],
         hot: [['lats', 0.12 + 0.8 * e], ['midback', 0.1 + 0.75 * e], ['biceps', 0.08 + 0.3 * e]],
       };
     },

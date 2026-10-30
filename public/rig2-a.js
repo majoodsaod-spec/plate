@@ -14,7 +14,14 @@
   const H = (k, e, lo) => (lo == null ? 0.12 : lo) + (0.94 - (lo == null ? 0.12 : lo)) * e * k;
   const barProps = (c, o) => P.barbell(c, o);
   /* a cable tower in front of (z>0) or behind (z<0) the lifter, with the pulley at height py */
-  const tower = (z, py, front) => [P.box('eq', -24, 24, 0, 6, z - 8, z + 8, 'back'), P.box('eq', -22, 22, 6, 232, z - 5, z + 5, 'back'), P.ball('eq2', [0, py, z - (front ? 2 : -2)], 5, 'back')];
+  /* a cable tower like a gym's: base, two uprights and a top bar, a weight stack on guide rods between them, and the pulley on its carriage */
+  const tower = (z, py, front) => {
+    const f = front ? -1 : 1;
+    return [P.box('eq', -26, 26, 0, 4, z - 12, z + 12, 'back'), P.box('eq', -24, -19, 4, 232, z - 4, z + 4, 'back'), P.box('eq', 19, 24, 4, 232, z - 4, z + 4, 'back'), P.box('eq', -24, 24, 226, 232, z - 4, z + 4, 'back'),
+      P.cap('gbar', [-8, 6, z], 0.8, [-8, 224, z], 0.8, 'back'), P.cap('gbar', [8, 6, z], 0.8, [8, 224, z], 0.8, 'back'),
+      P.box('stk', -12, 12, 6, 54, z - 3.5, z + 3.5, 'back'), P.cap('gbar', [0, 54, z], 1.1, [0, 120, z], 1.1, 'back'), P.box('eq2', -12, 12, 54, 58, z - 3.5, z + 3.5, 'back'),
+      P.box('eq2', -3, 3, py - 7, py + 7, z - 2, z + 2, 'back'), P.disc('eq2', [0, py, z - f * 3], 'z', 5, 2.4, 'back')];
+  };
   const seat = (z0, z1) => [P.box('eq', -17, 17, 38, 44, z0, z1, 'back'), P.box('eq', -4, 4, 0, 38, z0 + 8, z0 + 14, 'back'), P.box('eq', -22, 22, 0, 4, z0 - 6, z1 + 10, 'back')];
   const backPad = (z, y0, y1) => P.box('eq', -17, 17, y0, y1, z - 6, z, 'back');
   const seatedLegs = (z0) => (s) => ({ A: [s * 16, ankleY(0), z0 || 40], pole: [0, 1, 0.1], pitch: 0 });
@@ -132,7 +139,7 @@
       return {
         H: [0, 56, 0], a: -4, leg: seatedLegs(40), sh: [lerp(0, 2.5, p), 0], barHands: true,
         arm: (s) => ({ W: [s * 24, y, 6], pole: [s * 0.7, -1, -0.1] }),
-        props: seat(-24, 22).concat([backPad(-18, 44, 120), P.box('eq', -4, 4, 44, y + 12, -40, -34, 'back'), P.box('eq', -34, 34, y + 6, y + 12, -40, 16, 'back')]),
+        props: seat(-24, 22).concat([backPad(-18, 44, 120), P.box('eq', -24, -19, 4, 180, -48, -40, 'back'), P.box('eq', 19, 24, 4, 180, -48, -40, 'back'), P.box('eq', -26, 26, 174, 180, -50, -38, 'back'), P.box('stk', -12, 12, 6, 52, -47, -41, 'back'), P.box('eq', -4, 4, 44, y + 12, -40, -34, 'back'), P.cap('eq', [-28, y + 9, -37], 2.2, [28, y + 9, -37], 2.2, 'back'), P.cap('eq', [-28, y + 9, -37], 2.2, [-28, y + 9, 6], 2.2, 'back'), P.cap('eq', [28, y + 9, -37], 2.2, [28, y + 9, 6], 2.2, 'back')]),   // the moving frame: a crossbar behind and an arm out to each handle
         hot: [['shoulders', H(1, e)], ['triceps', H(0.45, e)]],
       };
     },
@@ -166,11 +173,11 @@
       return {
         H: [0, 56, 0], a: 2, leg: seatedLegs(38), sh: [0, 0], barHands: true,
         arm: (s, Sh) => { const d = [s * Math.sin(ph), 0, Math.cos(ph)], E = add(Sh, mul(d, LEN.UA)), W = add(E, mul([s * Math.sin(ph - 0.12), 0, Math.cos(ph - 0.12)], LEN.FA)); return { E, W }; },
-        props: seat(-22, 22).concat([P.box('eq', -17, 17, 90, 160, 22, 30, 'back'), P.box('eq', -4, 4, 44, 90, 22, 30, 'back')]),
+        props: seat(-22, 22).concat([P.box('pad', -15, 15, 90, 150, 22, 30, 'back'), P.box('eq', -4, 4, 4, 170, 30, 38, 'back'), P.box('eq', -26, 26, 166, 172, 24, 40, 'back')]),
         hot: [['shoulders', H(1, e)], ['traps', H(0.5, e)], ['midback', H(0.55, e)]],
       };
     },
-    post: (sc, pose, J) => [1, -1].map((s) => P.ball('gbar', J.side[s].W, 2.8, s === 1 ? 'near' : 'far')),
+    post: (sc, pose, J) => [1, -1].reduce((o, s) => { const W = J.side[s].W, L = s === 1 ? 'near' : 'far'; return o.concat([P.cap('eq2', add(W, [0, -5, 0]), 1.9, add(W, [0, 5, 0]), 1.9, L), P.cap('eq', add(W, [0, 5, 0]), 1.8, [s * 20, 168, 32], 1.8, L)]); }, []),
   };
 
   /* ---------- triceps, standing cable and overhead ---------- */
