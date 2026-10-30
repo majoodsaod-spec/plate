@@ -741,3 +741,6 @@ html.chatlock [aria-label="Nutrition"].segs, html.chatlock [aria-label="Gym sect
 html.chatlock #gcForm, html.chatlock #nForm, html.chatlock #chatForm { bottom: calc(var(--kb) + 8px); transition: none; }
 html.chatlock.chatfollow #gcForm, html.chatlock.chatfollow #nForm, html.chatlock.chatfollow #chatForm { bottom: 8px; }   /* in follow mode the page itself is moved, so the box is placed inside it */
 html.chatlock.chatfollow body { transform: translateY(var(--vvtop)); }
+
+/* the app never scrolls sideways */
+html, body { overflow-x: hidden; overflow-x: clip; overscroll-behavior-x: none; max-width: 100%; }

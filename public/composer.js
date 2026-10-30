@@ -40,7 +40,13 @@
     if (!vv) return 0;
     return Math.max(0, Math.round(layoutH() - vv.height - vv.offsetTop));
   }
+  /* never leave the page locked or shifted sideways: if the chat box is gone (another tab opened) or the page has slid left or right, put it back */
+  function sanity() {
+    if (locked && !isChatField(document.activeElement)) { unlock(); settle(); }
+    if (vv && vv.scale <= 1.01 && (window.scrollX > 0.5 || vv.offsetLeft > 0.5)) { window.scrollTo(0, window.scrollY); }
+  }
   function place() {
+    sanity();
     if (locked) { const ta = document.activeElement; const before = unpanned; unpan(); if (unpanned !== before && isChatField(ta)) { try { ta.setSelectionRange(ta.selectionStart, ta.selectionEnd); } catch (e) {} } }
     const kb = inset(); kbOpen = typing && kb > 90;      // small differences are the browser's own toolbar, not a keyboard
     root.style.setProperty('--kb', (kbOpen ? kb : 0) + 'px');
@@ -79,7 +85,8 @@
     });
   }
   if (vv) { vv.addEventListener('resize', () => { place(); if (typing) burst(600); }); vv.addEventListener('scroll', () => { if (locked) unpan(); place(); }); }
-  window.addEventListener('scroll', () => { if (locked) unpan(); }, { passive: true });
+  window.addEventListener('scroll', () => { if (locked) unpan(); sanity(); }, { passive: true });
+  document.addEventListener('click', () => setTimeout(sanity, 50), true);
   window.addEventListener('resize', place); window.addEventListener('orientationchange', () => setTimeout(place, 250));
   document.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('.composer textarea')) { grow(e.target); reserve(); } });
   /* when the keyboard comes up, keep the latest messages in view above the box */
