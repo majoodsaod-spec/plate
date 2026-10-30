@@ -168,7 +168,7 @@
       parts.forEach((pt) => {
         body += pt.items.map((i) => `<path class="${i.cls} dk" d="${i.d}"/>`).join('') + pt.items.map((i) => i.nolit ? '' : `<g clip-path="url(#${i.id})"><path class="${i.cls} lit" transform="translate(-${off} -${off})" d="${i.d}"/></g>`).join('') + (pt.hl || '');
       });
-      return '<g>' + defs + ol + body + '</g>';
+      return '<g>' + defs + ol + body + skinLate + '</g>';
     };
     const chain = (pts, radii, cls) => pts.slice(0, -1).map((q, i) => ({ d: cap(q, radii[i], pts[i + 1], radii[i + 1]), cls }));
     const glow = (d, v) => { const c = asst ? ' as' : ''; return `<path class="halo${c}" style="opacity:${(0.15 + 0.75 * v).toFixed(2)}" d="${d}"/><path class="h1${c}" style="opacity:${(0.1 + 0.78 * v).toFixed(2)}" d="${d}"/>`; };
@@ -186,6 +186,93 @@
       return glow(d, v * fade);
     };
 
+    /* ----- the muscle map on the 3D body: the same artwork as the Muscles tab, each muscle outline wrapped onto the surface of its limb or of the
+       torso (front view on the front half, back view on the back half), so it turns, bends and foreshortens with the figure. A muscle
+       outline that runs round the side stops at the silhouette edge. The glow for a worked muscle uses the same outlines. ----- */
+    const SK = root.Rig2Detail !== false && root.RigSkin ? root.RigSkin[BODY === BODIES.female ? 'female' : 'male'] : null;
+    const clampN = (x) => Math.max(-1, Math.min(1, x));
+    /* across the artwork (-1..1, edge to edge) -> angle round the body. Half way between a true orthographic unwrap (exact from the front)
+       and an even spread (so the sides, seen side-on, still show their muscles instead of thin slivers) */
+    const wrapA = (x) => { x = clampN(x); return 0.3 * Math.asin(x) + 0.7 * x * Math.PI / 2; };
+    const radAt = (rs, ts, t) => { if (t <= ts[0]) return rs[0]; for (let i = 0; i < ts.length - 1; i++) if (t <= ts[i + 1]) return lerp(rs[i], rs[i + 1], (t - ts[i]) / (ts[i + 1] - ts[i])); return rs[rs.length - 1]; };
+    const smoothPath = (p) => { const n = p.length; if (n < 3) return poly(p); const m = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; let d = 'M' + fx(m(p[n - 1], p[0])); for (let i = 0; i < n; i++) d += 'Q' + fx(p[i]) + ' ' + fx(m(p[i], p[(i + 1) % n])); return d + 'Z'; };
+    const angNear = (a, b) => { let d = (a - b) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return Math.abs(d); };
+    const GROUPHOT = { back: ['lats', 'midback'] };
+    const hotOf = (g, sd) => {
+      if (!g) return 0;
+      const names = GROUPHOT[g] || [g]; let best = names[0], bv = -1;
+      names.forEach((n) => { const v = hv(n, sd); if (v > bv) { bv = v; best = n; } });
+      return hv(best, sd);                                     // called last for the winner, so the yellow/red choice follows it
+    };
+    const skinDraw = (rec, pts, vs, farSide) => {
+      let nv = 0; vs.forEach((v) => { if (v > 0.06) nv++; }); if (nv < Math.max(3, vs.length * 0.3)) return '';      // mostly round the back: skip it rather than leave a sliver on the edge
+      let sum = 0; vs.forEach((v) => { sum += Math.max(0, v); }); const o = Math.max(0, Math.min(1, (sum / vs.length) / 0.45));
+      const d = smoothPath(pts), cls = rec.g ? 'skm' : 'ski';
+      let svg = `<path class="${cls}${farSide ? ' f' : ''}" style="opacity:${(0.55 + 0.45 * o).toFixed(2)}" d="${d}"/>`;
+      const v = hotOf(rec.g, rec.s); if (v > 0.001) svg += glow(d, v * (0.45 + 0.55 * o));
+      return svg;
+    };
+    const limbFrame = (b, k) => {
+      const L = BODY.leg, A = BODY.arm;
+      const f = b === 'th' ? { A: k.hip, B: k.knee, rs: [9.0 * L, 8.4 * L, 6.2 * L], ts: [0, 0.4, 1], F: mul(sub(k.ankle, k.knee), -1) }
+        : b === 'sh' ? { A: k.knee, B: k.ankle, rs: [6.2 * L, 5.5 * L, 3.4 * L], ts: [0, 0.3, 1], F: k.ff || J.zax }
+        : b === 'ua' ? { A: k.S, B: k.E, rs: [6.2 * A, 5.7 * A, 4.4 * A], ts: [0, 0.35, 1], F: sub(k.W, k.E) }
+        : { A: k.E, B: k.W, rs: [4.4 * A, 4.7 * A, 3.0 * A], ts: [0, 0.25, 1], F: sub(k.S, k.E) };
+      f.ax = norm(sub(f.B, f.A)); f.len = Math.hypot(...sub(f.B, f.A)); f.u = sideDir(f.A, f.B, f.F); let w = norm(cross3(f.ax, f.u)); if (dot(w, J.L) < 0) w = mul(w, -1); f.w = w;
+      f.cu = dot(f.u, C); f.cl = dot(f.w, C); f.ph0 = Math.atan2(-f.cu, f.cl);
+      return f;
+    };
+    const skinLimb = (bones, s) => {
+      if (!SK) return '';
+      const k = J.side[s], fr = {}; bones.forEach((b) => { fr[b] = limbFrame(b, k); });
+      let out = '';
+      for (const rec of SK) {
+        if (rec.s !== s || !fr[rec.b]) continue;
+        const f = fr[rec.b], pts = [], vs = [];
+        for (const [t, xn] of rec.p) {
+          const a = wrapA(xn); let ph = rec.v === 'f' ? a : Math.PI + a;
+          /* past either end of the bone the artwork wraps over the rounded joint (knee, elbow, shoulder) instead of running on in a straight line */
+          let beta = 0, end = null, tt = t;
+          if (t > 1) { end = 1; tt = 1; beta = Math.min(Math.PI / 2, (t - 1) * f.len / f.rs[f.rs.length - 1]); }
+          else if (t < 0) { end = 0; tt = 0; beta = Math.min(Math.PI / 2, -t * f.len / f.rs[0]); }
+          const nAt = (p2) => add(mul(f.u, Math.cos(p2)), mul(f.w, Math.sin(p2)));
+          const tip = end === 1 ? f.ax : mul(f.ax, -1);
+          const nrm = (p2) => (end == null ? nAt(p2) : add(mul(nAt(p2), Math.cos(beta)), mul(tip, Math.sin(beta))));
+          let v = dot(nrm(ph), C); vs.push(v);
+          if (v < 0) { ph = angNear(ph, f.ph0) < angNear(ph, f.ph0 + Math.PI) ? f.ph0 : f.ph0 + Math.PI; }   // round the side: stop at the silhouette
+          const r = radAt(f.rs, f.ts, tt) * 1.01;
+          pts.push(px(add(along(f.A, f.B, tt), mul(nrm(ph), r))));
+        }
+        const svg = skinDraw(rec, pts, vs, s === far);
+        if (rec.g === 'glutes') skinLate += svg; else out += svg;
+      }
+      return out;
+    };
+    let skinLate = '';                      // the glutes sit over the tops of both thighs, so they are drawn after every body part
+    const skinTorso = () => {
+      if (!SK) return '';
+      const cL = dot(J.L, C), cz = dot(J.zax, C);
+      let out = '';
+      for (const rec of SK) {
+        if (rec.b !== 'to') continue;
+        const pts = [], vs = [];
+        for (const [s0, xn] of rec.p) {
+          const s = Math.max(-0.45, Math.min(1.25, s0)), sc = Math.max(-0.1, Math.min(1.07, s));
+          let wx = sectDim(sc, 1), wz = sectDim(sc, 2);
+          if (s > 1.04) { const k = Math.min(1, (s - 1.04) / 0.14); wx = lerp(wx, BODY.neck * 1.25, k); wz = lerp(wz, BODY.neck * 1.1, k); }
+          wx *= 1.02; wz *= 1.02;
+          let ph = rec.v === 'f' ? Math.PI / 2 - wrapA(xn) : -Math.PI / 2 - wrapA(xn);
+          const a = cL / wx, b = cz / wz, v = (Math.cos(ph) * a + Math.sin(ph) * b) / Math.hypot(a, b); vs.push(v);
+          if (v < 0) { const p0 = Math.atan2(-a, b); ph = angNear(ph, p0) < angNear(ph, p0 + Math.PI) ? p0 : p0 + Math.PI; }
+          const c = add(J.H, mul(J.u, LEN.TORSO * s));
+          pts.push(px(add(c, add(mul(J.L, wx * Math.cos(ph)), mul(J.zax, wz * Math.sin(ph))))));
+        }
+        const svg = skinDraw(rec, pts, vs, false);
+        if (rec.g === 'glutes' || (rec.v === 'b' && rec.p.reduce((m, q) => m + q[0], 0) / rec.p.length < 0.02)) skinLate += svg; else out += svg;
+      }
+      return out;
+    };
+    const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     /* ----- props ----- */
     const drawProp = (q) => {
       if (q.t === 'cap') {
@@ -278,6 +365,7 @@
       items.push({ d: uni(stOut), cls: 'm sole' });
       }
       let hl = '';
+      if (SK) return { split: true, thigh: { items: items.slice(0, 2), hl: skinLimb(['th'], s) }, shin: { items: items.slice(2), hl: skinLimb(['sh'], s) } };   // two parts, so a thigh pointing at the camera is layered by its own depth
       const thF = sideDir(k.hip, k.knee, mul(sub(k.ankle, k.knee), -1)), thB = mul(thF, -1);
       hl += belly(k.hip, k.knee, 0.1, 0.9, 5.6, 2.4, thF, hv('quads', s));
       hl += belly(k.hip, k.knee, 0.1, 0.9, 5.2, 2.4, thB, hv('hamstrings', s));
@@ -291,11 +379,13 @@
     const arm = (s) => {
       const k = J.side[s], c = s === far ? 'm f' : 'm';
       let hl = '';
+      if (SK) hl = skinLimb(['ua', 'fa'], s); else {
       const bi = sideDir(k.S, k.E, sub(k.W, k.E)), tri = mul(bi, -1);
       hl += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, bi, hv('biceps', s));
       hl += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, tri, hv('triceps', s));
       hl += belly(k.E, k.W, 0.1, 0.78, 2.7, 0.9, sideDir(k.E, k.W, sub(k.S, k.E)), hv('forearms', s));
       hl += ballHL(add(add(k.S, mul(J.u, 1)), mul(J.L, s * 1.2)), 5.0, hv('shoulders', s));
+      }
       return group(chain([k.S, along(k.S, k.E, 0.35), k.E, along(k.E, k.W, 0.25), k.W], [6.2, 5.7, 4.4, 4.7, 3.0].map((r) => r * BODY.arm), c), hl);
     };
     /* ----- hands: a palm, four fingers and a thumb. They close around the bar or handle when gripping, lie flat on the floor when pressing, and hang relaxed otherwise ----- */
@@ -401,7 +491,7 @@
       }
       return Ls.length < 3 ? '' : glow(poly(Ls.concat(Rs.reverse())), v);
     };
-    const torsoHL = Object.keys(PATCH).map((n) => (hv(n) > 0.001 ? patch(n, far, hv(n)) + patch(n, near, hv(n)) : '')).join('');
+    const torsoHL = SK ? skinTorso() : Object.keys(PATCH).map((n) => (hv(n) > 0.001 ? patch(n, far, hv(n)) + patch(n, near, hv(n)) : '')).join('');
     const secPts = (s, wx, wz) => {
       const c = add(J.H, mul(J.u, LEN.TORSO * s)), pts = [];
       for (let i = 0; i < 18; i++) { const g = 2 * Math.PI * i / 18; pts.push(px(add(c, add(mul(J.L, wx * Math.cos(g)), mul(J.zax, wz * Math.sin(g)))))); }
@@ -527,7 +617,12 @@
     const kLegF = dep(mid2(kF.hip, kF.ankle)) - 1.5, kArmF = dep(mid2(kF.S, kF.W)) - 1.5, kLegN = dep(mid2(kN.hip, kN.ankle)) + 1.5, kArmN = dep(mid2(kN.S, kN.W)) + 1.5;
     put(-1e9, `<path class="shadow" d="${poly(hull(sh))}"/>` + props('back'));
     const kTorso = dep(add(J.H, mul(J.u, 25)));
-    const bodyParts = [{ k: kLegF, p: legParts(far) }, { k: kTorso, p: torsoParts }, { k: kLegN, p: legParts(near) }].sort((x, y) => x.k - y.k);
+    const legEntries = (sd, bias) => {
+      const lp = legParts(sd), kk = J.side[sd];
+      if (!lp.split) return [{ k: dep(mid2(kk.hip, kk.ankle)) + bias, p: lp }];
+      return [{ k: dep(mid2(kk.hip, kk.knee)) + bias, p: lp.thigh }, { k: dep(mid2(kk.knee, kk.ankle)) + bias, p: lp.shin }];
+    };
+    const bodyParts = legEntries(far, -1.5).concat([{ k: kTorso, p: torsoParts }], legEntries(near, 1.5)).sort((x, y) => x.k - y.k);
     put(kArmF, arm(far)); put(kArmF + 0.001, props('far'));
     put(kTorso, groupSeq(bodyParts.map((bp) => bp.p))); { const hk = Math.abs(kTorso - dep(J.head)) < 7 ? Math.max(dep(J.head) + 0.5, kTorso + 0.002) : dep(J.head) + 0.5; put(hk, head); if (tail) put(tailBack ? Math.max(tailDep, hk + 0.3) : Math.min(tailDep, hk - 0.3), tail); }   // the head always sits over the neck, so the neck never pokes out of the skull from behind
     put(kLegN + 0.001, props('mid')); put(kArmN, arm(near)); put(kArmN + 0.001, props('near'));

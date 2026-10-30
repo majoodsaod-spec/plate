@@ -744,3 +744,8 @@ html.chatlock.chatfollow body { transform: translateY(var(--vvtop)); }
 
 /* the app never scrolls sideways */
 html, body { overflow-x: hidden; overflow-x: clip; overscroll-behavior-x: none; max-width: 100%; }
+/* the muscle map drawn on the exercise figure (rig2.js + rig-skin.js): same colours as the Muscles tab */
+.gx-stage .skm { fill: var(--gmus); stroke: var(--card); stroke-width: 1.1px; stroke-linejoin: round; }
+.gx-stage .ski { fill: var(--gbody); stroke: var(--card); stroke-width: 1.1px; stroke-linejoin: round; }
+.gx-stage .skm.f { fill: color-mix(in srgb, var(--gmus) 88%, #000); }
+.gx-stage { --m: var(--gbody); --mf: color-mix(in srgb, var(--gbody) 86%, #000); }
