@@ -34,7 +34,7 @@
     const th = thetaDeg * D2R, ph = 6 * D2R, S = c.S, cx0 = 260 - (c.dx || 0) * S, y0 = c.y0;
     const R = [Math.cos(th), 0, -Math.sin(th)], C = [Math.sin(th), 0, Math.cos(th)];
     const cp = Math.cos(ph), sp = Math.sin(ph);
-    return { R, C, S, proj: (P) => [cx0 + dot(P, R) * S, y0 - (P[1] * cp - dot(P, C) * sp) * S] };
+    return { R, C, S, cx0, y0, cp, sp, proj: (P) => [cx0 + dot(P, R) * S, y0 - (P[1] * cp - dot(P, C) * sp) * S] };
   }
 
   /* ---------- 2D shape helpers ---------- */
@@ -168,7 +168,7 @@
       parts.forEach((pt) => {
         body += pt.items.map((i) => `<path class="${i.cls} dk" d="${i.d}"/>`).join('') + pt.items.map((i) => i.nolit ? '' : `<g clip-path="url(#${i.id})"><path class="${i.cls} lit" transform="translate(-${off} -${off})" d="${i.d}"/></g>`).join('') + (pt.hl || '');
       });
-      return '<g>' + defs + ol + body + skinLate + '</g>';
+      return '<g>' + defs + ol + body + '</g>';
     };
     const chain = (pts, radii, cls) => pts.slice(0, -1).map((q, i) => ({ d: cap(q, radii[i], pts[i + 1], radii[i + 1]), cls }));
     const glow = (d, v) => { const c = asst ? ' as' : ''; return `<path class="halo${c}" style="opacity:${(0.15 + 0.75 * v).toFixed(2)}" d="${d}"/><path class="h1${c}" style="opacity:${(0.1 + 0.78 * v).toFixed(2)}" d="${d}"/>`; };
@@ -204,8 +204,8 @@
       names.forEach((n) => { const v = hv(n, sd); if (v > bv) { bv = v; best = n; } });
       return hv(best, sd);                                     // called last for the winner, so the yellow/red choice follows it
     };
-    const skinDraw = (rec, pts, vs, farSide) => {
-      let nv = 0; vs.forEach((v) => { if (v > 0.06) nv++; }); if (nv < Math.max(3, vs.length * 0.3)) return '';      // mostly round the back: skip it rather than leave a sliver on the edge
+    const skinDraw = (rec, pts, vs, farSide, strict) => {
+      let nv = 0; vs.forEach((v) => { if (v > (strict ? 0.15 : 0.06)) nv++; }); if (nv < Math.max(3, vs.length * (strict ? 0.5 : 0.3))) return '';      // mostly round the back: skip it rather than leave a sliver on the edge
       let sum = 0; vs.forEach((v) => { sum += Math.max(0, v); }); const o = Math.max(0, Math.min(1, (sum / vs.length) / 0.45));
       const d = smoothPath(pts), cls = rec.g ? 'skm' : 'ski';
       let svg = `<path class="${cls}${farSide ? ' f' : ''}" style="opacity:${(0.55 + 0.45 * o).toFixed(2)}" d="${d}"/>`;
@@ -244,11 +244,10 @@
           pts.push(px(add(along(f.A, f.B, tt), mul(nrm(ph), r))));
         }
         const svg = skinDraw(rec, pts, vs, s === far);
-        if (rec.g === 'glutes') skinLate += svg; else out += svg;
+        out += svg;
       }
       return out;
     };
-    let skinLate = '';                      // the glutes sit over the tops of both thighs, so they are drawn after every body part
     const skinTorso = () => {
       if (!SK) return '';
       const cL = dot(J.L, C), cz = dot(J.zax, C);
@@ -256,6 +255,17 @@
       for (const rec of SK) {
         if (rec.b !== 'to') continue;
         const pts = [], vs = [];
+        if (rec.g === 'glutes') {                 // the glutes are laid on the back of the pelvis volume, seen straight from behind
+          for (const [s0, xn] of rec.p) {
+            let lx = xn * sectDim(Math.max(-0.1, Math.min(1.07, s0)), 1) * (rec.v === 'b' ? -1 : 1), ly = LEN.TORSO * s0 + 3;
+            let qx = lx / PELV.r[0], qy = ly / PELV.r[1]; const qq = qx * qx + qy * qy; if (qq > 0.8) { const k = Math.sqrt(0.8 / qq); qx *= k; qy *= k; }   // stay on the back of the pelvis
+            const qz = -Math.sqrt(Math.max(0, 1 - qx * qx - qy * qy));
+            const P = add(PELV.c, add(add(mul(J.L, qx * PELV.r[0] * 1.015), mul(J.u, qy * PELV.r[1] * 1.015)), mul(J.zax, qz * PELV.r[2] * 1.015)));
+            const n = norm(add(add(mul(J.L, qx / PELV.r[0]), mul(J.u, qy / PELV.r[1])), mul(J.zax, qz / PELV.r[2])));
+            vs.push(dot(n, C)); pts.push(px(P));
+          }
+          out += skinDraw(rec, pts, vs, false, true); continue;
+        }
         for (const [s0, xn] of rec.p) {
           const s = Math.max(-0.45, Math.min(1.25, s0)), sc = Math.max(-0.1, Math.min(1.07, s));
           let wx = sectDim(sc, 1), wz = sectDim(sc, 2);
@@ -268,7 +278,7 @@
           pts.push(px(add(c, add(mul(J.L, wx * Math.cos(ph)), mul(J.zax, wz * Math.sin(ph))))));
         }
         const svg = skinDraw(rec, pts, vs, false);
-        if (rec.g === 'glutes' || (rec.v === 'b' && rec.p.reduce((m, q) => m + q[0], 0) / rec.p.length < 0.02)) skinLate += svg; else out += svg;
+        out += svg;
       }
       return out;
     };
@@ -374,19 +384,22 @@
       const gc = add(add(add(J.H, mul(J.zax, -4.6)), mul(J.u, -5.4)), mul(J.L, s * 4.6));
       { const vis = dot(mul(J.zax, -1), C), fd = 0.35 + 0.65 * Math.max(0, Math.min(1, (vis + 0.25) / 0.7)); hl += ballHL(gc, 6.2, hv('glutes', s) * fd); }
       hl += ballHL(add(add(add(J.H, mul(J.zax, -3)), mul(J.u, 2)), mul(J.L, s * 8)), 5.2, hv('abductors', s));
-      return { items, hl };
+      const hlS = belly(k.knee, k.ankle, 0.06, 0.62, 3.9, 1.5, mul(sideDir(k.knee, k.ankle, J.zax), -1), hv('calves', s));
+      return { split: true, thigh: { items: items.slice(0, 2), hl: hl.replace(hlS, '') }, shin: { items: items.slice(2), hl: hlS } };
     };
     const arm = (s) => {
       const k = J.side[s], c = s === far ? 'm f' : 'm';
-      let hl = '';
-      if (SK) hl = skinLimb(['ua', 'fa'], s); else {
-      const bi = sideDir(k.S, k.E, sub(k.W, k.E)), tri = mul(bi, -1);
-      hl += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, bi, hv('biceps', s));
-      hl += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, tri, hv('triceps', s));
-      hl += belly(k.E, k.W, 0.1, 0.78, 2.7, 0.9, sideDir(k.E, k.W, sub(k.S, k.E)), hv('forearms', s));
-      hl += ballHL(add(add(k.S, mul(J.u, 1)), mul(J.L, s * 1.2)), 5.0, hv('shoulders', s));
+      const items = chain([k.S, along(k.S, k.E, 0.35), k.E, along(k.E, k.W, 0.25), k.W], [6.2, 5.7, 4.4, 4.7, 3.0].map((r) => r * BODY.arm), c);
+      let hu = '', hf = '';
+      if (SK) { hu = skinLimb(['ua'], s); hf = skinLimb(['fa'], s); }
+      else {
+        const bi = sideDir(k.S, k.E, sub(k.W, k.E)), tri = mul(bi, -1);
+        hu += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, bi, hv('biceps', s));
+        hu += belly(k.S, k.E, 0.16, 0.9, 3.5, 1.9, tri, hv('triceps', s));
+        hu += ballHL(add(add(k.S, mul(J.u, 1)), mul(J.L, s * 1.2)), 5.0, hv('shoulders', s));
+        hf += belly(k.E, k.W, 0.1, 0.78, 2.7, 0.9, sideDir(k.E, k.W, sub(k.S, k.E)), hv('forearms', s));
       }
-      return group(chain([k.S, along(k.S, k.E, 0.35), k.E, along(k.E, k.W, 0.25), k.W], [6.2, 5.7, 4.4, 4.7, 3.0].map((r) => r * BODY.arm), c), hl);
+      return { ua: { items: items.slice(0, 2), hl: hu }, fa: { items: items.slice(2), hl: hf } };
     };
     /* ----- hands: a palm, four fingers and a thumb. They close around the bar or handle when gripping, lie flat on the floor when pressing, and hang relaxed otherwise ----- */
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -491,6 +504,7 @@
       }
       return Ls.length < 3 ? '' : glow(poly(Ls.concat(Rs.reverse())), v);
     };
+    const PELV = { c: add(add(J.H, mul(J.u, -3)), mul(J.zax, -2.2)), r: [SECT[0][1] * 1.02, 10.5, SECT[0][2] * 1.08] };
     const torsoHL = SK ? skinTorso() : Object.keys(PATCH).map((n) => (hv(n) > 0.001 ? patch(n, far, hv(n)) + patch(n, near, hv(n)) : '')).join('');
     const secPts = (s, wx, wz) => {
       const c = add(J.H, mul(J.u, LEN.TORSO * s)), pts = [];
@@ -500,6 +514,9 @@
     const secs = SECT.map((q) => secPts(q[0], q[1], q[2]));
     const torsoItems = [];
     for (let i = 0; i < secs.length - 1; i++) torsoItems.push({ d: poly(hull(secs[i].concat(secs[i + 1]))), cls: 'm' });
+    /* the pelvis and buttocks: one rounded volume that turns with the torso, so the hips stay round when the thighs fold up (squats, sitting, lunges) */
+    { const pts = []; for (let i = 0; i <= 8; i++) { const al = Math.PI * i / 8; for (let j = 0; j < 16; j++) { const be = 2 * Math.PI * j / 16; pts.push(px(add(PELV.c, add(add(mul(J.L, PELV.r[0] * Math.sin(al) * Math.cos(be)), mul(J.u, PELV.r[1] * Math.cos(al))), mul(J.zax, PELV.r[2] * Math.sin(al) * Math.sin(be)))))); } }
+      torsoItems.push({ d: poly(hull(pts)), cls: 'm' }); }
     const neckTop = sub(J.head, add(mul(J.u, 5), mul(J.zax, 1)));
     torsoItems.push({ d: cap(add(add(J.T, mul(J.u, 1)), mul(J.zax, 1.5)), 5.0, neckTop, BODY.neck), cls: 'm' });
     const torsoParts = { items: torsoItems, hl: torsoHL };
@@ -609,27 +626,196 @@
     for (let i = 0; i < 28; i++) { const g = 2 * Math.PI * i / 28; sh.push(px([sc0.c[0] + sc0.rx * Math.cos(g), 0, sc0.c[2] + sc0.rz * Math.sin(g)])); }
     /* ----- painter's order: everything held (bars, plates, dumbbells, fists) and every body part is sorted by its distance from the camera, so the layering is right from any angle ----- */
     const dep = (p) => dot(p, C), mid2 = (p, q) => mul(add(p, q), 0.5), kF = J.side[far], kN = J.side[near];
-    const items = [], put = (k, svg) => items.push({ k, i: items.length, svg });
-    for (const q of sx.props || []) if (isImpl(q)) put(dep(q.t === 'cap' ? mid2(q.a, q.b) : q.c), drawProp(q));
+    const items = [], put = (k, svg, u) => items.push({ k, i: items.length, svg, u });
     const anchorOf = (q) => (q.t === 'box' ? [(q.b[0] + q.b[1]) / 2, (q.b[2] + q.b[3]) / 2, (q.b[4] + q.b[5]) / 2] : (q.a && q.b) ? mid2(q.a, q.b) : q.c);
-    for (const q of sx.props || []) if (q.layer === 'sort' && !isImpl(q)) put(dep(anchorOf(q)), drawProp(q));
-    for (const q of sx.props || []) { if (isImpl(q)) continue; const an = autoSort(q); if (an) put(dep(an) - 11, drawProp(q)); }   // machine parts that can stand in front of the figure: sorted by their own distance from the camera
-    const kLegF = dep(mid2(kF.hip, kF.ankle)) - 1.5, kArmF = dep(mid2(kF.S, kF.W)) - 1.5, kLegN = dep(mid2(kN.hip, kN.ankle)) + 1.5, kArmN = dep(mid2(kN.S, kN.W)) + 1.5;
+    (sx.props || []).forEach((q, qi) => { if (q.layer === 'sort' && !isImpl(q)) put(dep(anchorOf(q)), drawProp(q), { id: 'ps' + qi }); });
+    (sx.props || []).forEach((q, qi) => { if (isImpl(q)) return; const an = autoSort(q); if (an) put(dep(an) - 11, drawProp(q), { id: 'ps' + qi }); });   // machine parts that can stand in front of the figure: sorted by their own distance from the camera
     put(-1e9, `<path class="shadow" d="${poly(hull(sh))}"/>` + props('back'));
     const kTorso = dep(add(J.H, mul(J.u, 25)));
-    const legEntries = (sd, bias) => {
-      const lp = legParts(sd), kk = J.side[sd];
-      if (!lp.split) return [{ k: dep(mid2(kk.hip, kk.ankle)) + bias, p: lp }];
-      return [{ k: dep(mid2(kk.hip, kk.knee)) + bias, p: lp.thigh }, { k: dep(mid2(kk.knee, kk.ankle)) + bias, p: lp.shin }];
+    /* ----- what is in front of what: every body part also gets a simple 3D stand-in (capsules for limbs, ellipsoids for the torso and head).
+       For each pair of parts that overlap on screen, rays are cast through the overlap and the part that is really nearer the camera wins.
+       Those wins give a drawing order (a part is drawn after everything it covers); where they say nothing, the old distance rule stands. ----- */
+    const PRIM = {}, pc = (u, a, b, r) => (PRIM[u] = PRIM[u] || []).push({ t: 0, a, b, r }), pe = (u, c, e, r) => (PRIM[u] = PRIM[u] || []).push({ t: 1, c, e, r });
+    {
+      const Lg = BODY.leg, Ar = BODY.arm;
+      for (const sd of [far, near]) {
+        const x = sd === far ? 'F' : 'N', k = J.side[sd];
+        pc('th' + x, k.hip, along(k.hip, k.knee, 0.4), 8.7 * Lg); pc('th' + x, along(k.hip, k.knee, 0.4), k.knee, 7.3 * Lg);
+        pc('sh' + x, k.knee, along(k.knee, k.ankle, 0.3), 5.85 * Lg); pc('sh' + x, along(k.knee, k.ankle, 0.3), k.ankle, 4.45 * Lg);
+        if (k.ff) pc('sh' + x, add(k.ankle, add(mul(k.ff, -5), mul(k.dn || [0, -1, 0], 3))), add(k.ankle, add(mul(k.ff, 16 * BODY.foot[0]), mul(k.dn || [0, -1, 0], 5))), 3.4);
+        pc('ua' + x, k.S, along(k.S, k.E, 0.35), 5.95 * Ar); pc('ua' + x, along(k.S, k.E, 0.35), k.E, 5.05 * Ar);
+        pc('fa' + x, k.E, along(k.E, k.W, 0.25), 4.55 * Ar); pc('fa' + x, along(k.E, k.W, 0.25), k.W, 3.85 * Ar);
+      }
+      for (let i = 0; i < SECT.length - 1; i++) {
+        const a0 = SECT[i], a1 = SECT[i + 1], sm = (a0[0] + a1[0]) / 2;
+        pe('to', add(J.H, mul(J.u, LEN.TORSO * sm)), [J.L, J.u, J.zax], [(a0[1] + a1[1]) / 2, LEN.TORSO * (a1[0] - a0[0]) * 0.62 + 1.5, (a0[2] + a1[2]) / 2]);
+      }
+      pc('to', add(add(J.T, mul(J.u, 1)), mul(J.zax, 1.5)), sub(J.head, add(mul(J.u, 5), mul(J.zax, 1))), BODY.neck);
+      pe('to', PELV.c, [J.L, J.u, J.zax], PELV.r);
+      pe('hd', J.head, [J.L, J.u, J.zax], BODY.head);
+    }
+    const Yup = [0, 1, 0], vray = add(C, mul(Yup, cam.sp / cam.cp)), vv = dot(vray, vray);
+    const rayO = (X, Y) => add(mul(cam.R, (X - cam.cx0) / S), mul(Yup, (cam.y0 - Y) / (S * cam.cp)));
+    const sphereHit = (O, c, r) => { const m = sub(O, c), B = 2 * dot(vray, m), Cc = dot(m, m) - r * r, D = B * B - 4 * vv * Cc; return D < 0 ? -Infinity : (-B + Math.sqrt(D)) / (2 * vv); };
+    const capHit = (O, p) => {
+      const w = sub(p.b, p.a), ww = dot(w, w) || 1e-9, m = sub(O, p.a);
+      const v2 = sub(vray, mul(w, dot(vray, w) / ww)), m2 = sub(m, mul(w, dot(m, w) / ww));
+      const A = dot(v2, v2), B = 2 * dot(v2, m2), Cc = dot(m2, m2) - p.r * p.r; let best = -Infinity;
+      if (A > 1e-9) { const D = B * B - 4 * A * Cc; if (D >= 0) { const t = (-B + Math.sqrt(D)) / (2 * A), u = dot(add(m, mul(vray, t)), w) / ww; if (u >= 0 && u <= 1) best = t; } }
+      return Math.max(best, sphereHit(O, p.a, p.r), sphereHit(O, p.b, p.r));
     };
-    const bodyParts = legEntries(far, -1.5).concat([{ k: kTorso, p: torsoParts }], legEntries(near, 1.5)).sort((x, y) => x.k - y.k);
-    put(kArmF, arm(far)); put(kArmF + 0.001, props('far'));
-    put(kTorso, groupSeq(bodyParts.map((bp) => bp.p))); { const hk = Math.abs(kTorso - dep(J.head)) < 7 ? Math.max(dep(J.head) + 0.5, kTorso + 0.002) : dep(J.head) + 0.5; put(hk, head); if (tail) put(tailBack ? Math.max(tailDep, hk + 0.3) : Math.min(tailDep, hk - 0.3), tail); }   // the head always sits over the neck, so the neck never pokes out of the skull from behind
-    put(kLegN + 0.001, props('mid')); put(kArmN, arm(near)); put(kArmN + 0.001, props('near'));
-    hand(far).forEach((h) => put(h.k, h.svg)); hand(near).forEach((h) => put(h.k, h.svg));
+    const ellHit = (O, p) => {
+      const m = sub(O, p.c), o = p.e.map((e, i) => dot(m, e) / p.r[i]), v = p.e.map((e, i) => dot(vray, e) / p.r[i]);
+      const A = v[0] * v[0] + v[1] * v[1] + v[2] * v[2], B = 2 * (o[0] * v[0] + o[1] * v[1] + o[2] * v[2]), Cc = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - 1, D = B * B - 4 * A * Cc;
+      return D < 0 ? -Infinity : (-B + Math.sqrt(D)) / (2 * A);
+    };
+    const unitHit = (u, X, Y) => { const O = rayO(X, Y); let b = -Infinity; for (const p of PRIM[u]) { const h = p.t === 0 ? capHit(O, p) : ellHit(O, p); if (h > b) b = h; } return b; };
+    const ubox = (u) => {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const p of PRIM[u]) {
+        const pts = p.t === 0 ? [[p.a, p.r], [p.b, p.r]] : [[p.c, Math.max(...p.r)]];
+        for (const [q, r] of pts) { const z = px(q), rr = r * S; x0 = Math.min(x0, z[0] - rr); x1 = Math.max(x1, z[0] + rr); y0 = Math.min(y0, z[1] - rr); y1 = Math.max(y1, z[1] + rr); }
+      }
+      return [x0, y0, x1, y1];
+    };
+    /* which of two parts is nearer where they overlap on screen: +1 the first, -1 the second, 0 no overlap */
+    const vote = (ia, ib) => {
+      const A = ubox(ia), B = ubox(ib), x0 = Math.max(A[0], B[0]), x1 = Math.min(A[2], B[2]), y0 = Math.max(A[1], B[1]), y1 = Math.min(A[3], B[3]);
+      if (x1 - x0 < 1 || y1 - y0 < 1) return 0;
+      let va = 0, vb = 0; const G = 6;
+      for (let a = 0; a < G; a++) for (let b = 0; b < G; b++) {
+        const X = x0 + (x1 - x0) * (a + 0.5) / G, Y = y0 + (y1 - y0) * (b + 0.5) / G, da = unitHit(ia, X, Y); if (da === -Infinity) continue;
+        const db = unitHit(ib, X, Y); if (db === -Infinity) continue;
+        if (da > db + 0.25) va++; else if (db > da + 0.25) vb++;
+      }
+      return va > vb ? 1 : vb > va ? -1 : 0;
+    };
+    /* the order: a part is drawn after every part it covers. Ties and silence fall back to the distance keys */
+    const order = (units) => {
+      const n = units.length, box = units.map((u) => ubox(u.id)), W = units.map(() => new Map());   // W[i].get(j) = how strongly j must be drawn before i
+      const dz = units.map((u) => { let lo = Infinity, hi = -Infinity; for (const p of PRIM[u.id]) { const r = p.t === 0 ? p.r : Math.max(...p.r); for (const q of p.t === 0 ? [p.a, p.b] : [p.c]) { const d = dep(q); lo = Math.min(lo, d - r); hi = Math.max(hi, d + r); } } return [lo, hi]; });
+      const joined = (a, b) => { const t = [a, b].sort().join(','); return /^(hd|th.),to$/.test(t) || /^to,ua.$/.test(t) || /^sh(.),th\1$/.test(t) || /^fa(.),ua\1$/.test(t) || /^fa(.),hn\1$/.test(t); };
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        if (units[i].impl && units[j].impl) continue;                              // pieces of the same kit keep their own order
+        const A = box[i], B = box[j], x0 = Math.max(A[0], B[0]), x1 = Math.min(A[2], B[2]), y0 = Math.max(A[1], B[1]), y1 = Math.min(A[3], B[3]);
+        if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+        const ii0 = units[i].id, jj0 = units[j].id;
+        if (!(ii0 === 'hd' && jj0 === 'to') && !(ii0 === 'to' && jj0 === 'hd')) {        // wholly nearer or farther: no rays needed
+          if (dz[i][0] > dz[j][1] + 0.5) { W[i].set(j, 3); continue; }
+          if (dz[j][0] > dz[i][1] + 0.5) { W[j].set(i, 3); continue; }
+        }
+        let vi = 0, vj = 0; const G = 6;
+        for (let a = 0; a < G; a++) for (let b = 0; b < G; b++) {
+          const X = x0 + (x1 - x0) * (a + 0.5) / G, Y = y0 + (y1 - y0) * (b + 0.5) / G;
+          let di = unitHit(units[i].id, X, Y); if (di === -Infinity) continue;
+          let dj = unitHit(units[j].id, X, Y); if (dj === -Infinity) continue;
+          if (units[i].impl) di += 1.2; if (units[j].impl) dj += 1.2;           // kit resting on the body (a bar on the back, a dumbbell on the chest) shows on top of it
+          if (di > dj + 0.25) vi++; else if (dj > di + 0.25) vj++;
+        }
+        const ii = units[i].id, jj = units[j].id;
+        if ((ii === 'hd' && jj === 'to') || (ii === 'to' && jj === 'hd')) {   // the head sits over the neck unless the rays clearly say otherwise
+          const h = ii === 'hd' ? i : j, t = h === i ? j : i, vh = h === i ? vi : vj, vt = h === i ? vj : vi;
+          if (vt < 3 || vt <= vh) { W[h].set(t, 2); continue; }
+        }
+        const k = joined(ii, jj) ? 0.5 : 1;                                       // where two parts are joined their stand-ins overlap, so those votes count for less
+        if (vi > vj) W[i].set(j, (vi - vj) * k); else if (vj > vi) W[j].set(i, (vj - vi) * k);
+      }
+      const done = new Array(n).fill(false), out = [];
+      for (let step = 0; step < n; step++) {
+        let pick = -1;
+        for (let i = 0; i < n; i++) if (!done[i] && [...W[i].keys()].every((j) => done[j]) && (pick < 0 || units[i].k < units[pick].k)) pick = i;
+        if (pick < 0) {                                                            // a loop: drop its weakest link and carry on
+          let bi = -1, bj = -1, bw = Infinity;
+          for (let i = 0; i < n; i++) if (!done[i]) for (const [j, w] of W[i]) if (!done[j] && w < bw) { bw = w; bi = i; bj = j; }
+          if (bi >= 0) { W[bi].delete(bj); step--; continue; }
+          for (let i = 0; i < n; i++) if (!done[i] && (pick < 0 || units[i].k < units[pick].k)) pick = i;
+        }
+        done[pick] = true; out.push(units[pick]);
+      }
+      /* the two halves of an arm or leg drawn one right after the other where nothing has to come between them, so the joint has no seam */
+      const idx = (id) => out.findIndex((u) => u.id === id), need = (a, b) => { const ia = units.indexOf(a), ib = units.indexOf(b); return W[ia].has(ib) || W[ib].has(ia); };
+      for (const [p, q] of [['uaF', 'faF'], ['uaN', 'faN'], ['thF', 'shF'], ['thN', 'shN']]) {
+        let a = idx(p), b = idx(q); if (a < 0 || b < 0) continue; if (a > b) [a, b] = [b, a];
+        if (b - a < 2) continue;
+        const later = out[b], between = out.slice(a + 1, b);
+        if (between.every((m) => !need(later, m))) { out.splice(b, 1); out.splice(a + 1, 0, later); }
+        else { const first = out[a]; if (between.every((m) => !need(first, m))) { out.splice(a, 1); out.splice(b - 1, 0, first); } }
+      }
+      /* new keys in that order, as close to the true distances as possible (pool-adjacent-violators), so held things and hands still slot in by distance */
+      const blocks = [];
+      for (const u of out) { const w = u.w || 1; blocks.push({ s: u.k * w, n: w, us: [u] }); while (blocks.length > 1 && blocks[blocks.length - 2].s / blocks[blocks.length - 2].n > blocks[blocks.length - 1].s / blocks[blocks.length - 1].n) { const b2 = blocks.pop(), b1 = blocks[blocks.length - 1]; b1.s += b2.s; b1.n += b2.n; b1.us = b1.us.concat(b2.us); } }
+      for (const b of blocks) b.us.forEach((u, q) => { u.k2 = b.s / b.n + q * 0.004; });
+      for (let i = 1; i < out.length; i++) if (out[i].k2 <= out[i - 1].k2) out[i].k2 = out[i - 1].k2 + 1e-4;   // strictly in order, even where blocks sit at the same distance
+      return out;
+    };
+    const kd = (a, b) => dep(mid2(a, b));
+    const LP = { F: legParts(far), N: legParts(near) }, AP = { F: arm(far), N: arm(near) };
+    const units = [{ id: 'to', k: kTorso, part: torsoParts, run: 'body' }, { id: 'hd', k: Math.abs(kTorso - dep(J.head)) < 7 ? Math.max(dep(J.head) + 0.5, kTorso + 0.002) : dep(J.head) + 0.5, svg: head }];
+    for (const x of ['F', 'N']) {
+      const k = J.side[x === 'F' ? far : near], bias = x === 'F' ? -1.5 : 1.5;
+      units.push({ id: 'th' + x, k: kd(k.hip, k.knee) + bias, part: LP[x].thigh, run: 'body' }, { id: 'sh' + x, k: kd(k.knee, k.ankle) + bias, part: LP[x].shin, run: 'body' });
+      units.push({ id: 'ua' + x, k: kd(k.S, k.E) + bias, part: AP[x].ua, run: 'arm' + x }, { id: 'fa' + x, k: kd(k.E, k.W) + bias, part: AP[x].fa, run: 'arm' + x });
+    }
+    /* things held or lifted (bars, plates, dumbbells, balls) join in. A long bar is cut into short pieces so it can pass in front of one part and behind another.
+       They keep their true distance (heavy weight below), so the hands that grip them still wrap round them; the body parts move to suit. */
+    (sx.props || []).forEach((q, qi) => {
+      if (!isImpl(q)) return;
+      if (q.t === 'cap') {
+        const L = Math.hypot(...sub(q.b, q.a)), n = Math.max(1, Math.min(8, Math.round(L / 14)));
+        for (let i = 0; i < n; i++) {
+          const a = along(q.a, q.b, i / n), b = along(q.a, q.b, (i + 1) / n), id = 'pi' + qi + '_' + i;
+          pc(id, a, b, Math.max(q.ra, q.rb));
+          units.push({ id, k: dep(mid2(a, b)), svg: drawProp(Object.assign({}, q, { a, b, ra: lerp(q.ra, q.rb, i / n), rb: lerp(q.ra, q.rb, (i + 1) / n) })), w: 1e6, impl: true });
+        }
+      } else {
+        const id = 'pi' + qi;
+        if (q.t === 'ball') pc(id, q.c, q.c, q.r);
+        else { const ax = Array.isArray(q.axis) ? norm(q.axis) : q.axis === 'x' ? [1, 0, 0] : q.axis === 'y' ? [0, 1, 0] : [0, 0, 1]; const t0 = Math.abs(ax[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]; const e1 = norm(cross(ax, t0)); pe(id, q.c, [ax, e1, cross(ax, e1)], [Math.max(q.th / 2, 0.6), q.r, q.r]); }
+        units.push({ id, k: dep(q.c), svg: drawProp(q), w: 1e6, impl: true });
+      }
+    });
+    /* the hands join too, as fixed points like the kit they hold; their fingers keep their own order round the handle */
+    const HS = {};
+    for (const sd of [far, near]) {
+      const x = sd === far ? 'F' : 'N', k = J.side[sd], hs = hand(sd), c = add(k.W, mul(norm(sub(k.W, k.E)), 3));
+      pc('hn' + x, k.W, add(k.W, mul(norm(sub(k.W, k.E)), 6)), 3.6);
+      HS[x] = hs; units.push({ id: 'hn' + x, k: dep(c), w: 1e6, impl: true, hand: hs });
+    }
+    const ord = order(units), U = {}; ord.forEach((u) => { U[u.id] = u; });
+    ord.forEach((u, oi) => {
+      if (!u.hand) { put(u.k2, u.svg || null, u); return; }
+      let lo = -Infinity, hi = Infinity;                                   // the fingers spread round the handle, but never past the body parts drawn just before and after the hand
+      for (let i = oi - 1; i >= 0; i--) if (!ord[i].impl) { lo = ord[i].k2; break; }
+      for (let i = oi + 1; i < ord.length; i++) if (!ord[i].impl) { hi = ord[i].k2; break; }
+      u.hand.forEach((h) => put(Math.max(lo + 1e-5, Math.min(hi - 1e-5, u.k2 + (h.k - u.k))), h.svg, { id: u.id }));
+    });
+    put(Math.max(U.uaF.k2, U.faF.k2) + 0.001, props('far')); put(Math.max(U.thN.k2, U.shN.k2) + 0.001, props('mid')); put(Math.max(U.uaN.k2, U.faN.k2) + 0.001, props('near'));
+    if (tail) { const hk = U.hd.k2; put(tailBack ? Math.max(tailDep, hk + 0.3) : Math.min(tailDep, hk - 0.3), tail); }   // the ponytail keeps to its side of the head
+
     put(1e9, props('top'));
+    if (root.__rigProbeOn) {
+      (sx.props || []).forEach((q, qi) => {
+        if (isImpl(q)) return; const id = 'ps' + qi;
+        if (q.t === 'cap') pc(id, q.a, q.b, Math.max(q.ra, q.rb));
+        else if (q.t === 'ball') pc(id, q.c, q.c, q.r);
+        else if (q.t === 'disc') { const ax = Array.isArray(q.axis) ? norm(q.axis) : q.axis === 'x' ? [1, 0, 0] : q.axis === 'y' ? [0, 1, 0] : [0, 0, 1]; const t0 = Math.abs(ax[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]; const e1 = norm(cross(ax, t0)), e2 = cross(ax, e1); pe(id, q.c, [ax, e1, e2], [Math.max(q.th / 2, 0.5), q.r, q.r]); }
+        else if (q.t === 'box') { const b = q.b; pe(id, [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[4] + b[5]) / 2], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [(b[1] - b[0]) / 2 * 1.1, (b[3] - b[2]) / 2 * 1.1, (b[5] - b[4]) / 2 * 1.1]); }
+      });
+    }
+    if (root.__rigProbeOn) root.__rigProbe = { PRIM, order: ord.map((u) => u.id), unitHit, ubox };
     items.sort((p, q) => p.k - q.k || p.i - q.i);
-    const out = items.map((t) => t.svg);
+    /* parts of one body drawn back to back share their outlines (no seam where the thigh meets the hips, or the forearm the upper arm) */
+    const out = []; let run = null;
+    const flush = () => { if (run) { out.push(groupSeq(run.parts)); run = null; } };
+    const tagOn = root.__rigTag;
+    for (const t of items) {
+      if (t.u && (t.u.part || t.u.parts)) {
+        const ps = t.u.parts || [t.u.part];
+        if (run && run.name === t.u.run && !tagOn) run.parts.push(...ps);
+        else { flush(); run = { name: t.u.run, parts: ps.slice() }; if (tagOn) { out.push(`<g data-u="${t.u.id}">`); flush(); out.push('</g>'); } }
+      } else { flush(); out.push(tagOn && t.u ? `<g data-u="${t.u.id}">${t.svg}</g>` : t.svg); }
+    }
+    flush();
     return out.join('');
   }
 
