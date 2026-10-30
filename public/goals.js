@@ -106,4 +106,16 @@
   })();
 
   window.Plate.calcGoals = calc;
+  /* a newer weight or height logged anywhere: the profile follows it, and so do the daily targets unless you set your own */
+  window.Plate.syncBody = async (kg, cm) => {
+    const p = await DB.get('profile', null); if (!p) return false;
+    let ch = false;
+    if (kg >= 30 && kg <= 250 && p.weight !== kg) { p.weight = kg; ch = true; }
+    if (cm >= 120 && cm <= 230 && p.height !== cm) { p.height = cm; ch = true; }
+    if (!ch) return false;
+    await DB.set('profile', p);
+    const gl = await DB.get('goals', null);
+    if (gl && !gl.custom && valid(p)) { const c = calc(p); await DB.set('goals', Object.assign({}, gl, { kcal: c.kcal, protein: c.protein, carbs: c.carbs, fat: c.fat, bmr: c.bmr, tdee: c.tdee, basisH: p.height })); }
+    return true;
+  };
 })();

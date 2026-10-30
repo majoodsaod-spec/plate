@@ -83,6 +83,11 @@
     if (kg == null) fail('weight must be 25 to 350 kg');
     const old = (await DB.allWeights()).find((w) => w.date === date);
     await DB.setWeight(date, r1(kg), cm || (old && old.cm) || undefined);
+    const ws = await DB.allWeights(), newest = ws.length ? ws[ws.length - 1].date : date;
+    if (date >= newest && root.Plate && root.Plate.syncBody) {                       // the newest entry: the profile and targets follow it
+      const oldP = await DB.get('profile', null), oldG = await DB.get('goals', null);
+      if (await root.Plate.syncBody(r1(kg), cm)) log.undo(async () => { await DB.set('profile', oldP); await DB.set('goals', oldG); });
+    }
     log.undo(() => (old ? DB.setWeight(old.date, old.kg, old.cm) : DB.deleteWeight(date)));
     return `Weight ${r1(kg)} kg on ${date === today() ? 'today' : date}`;
   });

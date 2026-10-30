@@ -230,8 +230,7 @@
     if (kg != null) await DB.setWeight(day, kg, cm);
     // the profile (and so your goals) follows your newest numbers only; editing an old day changes the history, not today's targets
     if (day >= latest || day === today) {
-      const p = await DB.get('profile', null);
-      if (p && !isNaN(h)) { p.height = Math.round(h * 10) / 10; await DB.set('profile', p); }
+      if (window.Plate.syncBody) await window.Plate.syncBody(!isNaN(v) ? kg : null, !isNaN(h) ? Math.round(h * 10) / 10 : null);
     }
     status('#wStatus', day === today ? 'Saved.' : 'Saved for ' + day + '.');
     render(); window.Plate.refreshToday();
