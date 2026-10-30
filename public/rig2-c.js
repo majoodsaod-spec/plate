@@ -21,6 +21,7 @@
     },
     post: (sc, pose, J) => { const W = J.side[1].W; return [P.cap('gbar', [-(o.gx || 26) - 2, W[1], W[2]], 1.5, [(o.gx || 26) + 2, W[1], W[2]], 1.5, 'near')]; },
   });
+  S['lat-pulldown'] = Object.assign(pulldown({ gx: 27, hot: (e) => [['lats', H(1, e)], ['biceps', H(0.45, e)], ['midback', H(0.4, e)], ['shoulders', H(0.25, e)]] }), { theta: -120, range: [-135, -10] });   // from behind and to the side, so the lats show
   S['close-grip-pulldown'] = pulldown({ gx: 9, hot: (e) => [['lats', H(1, e)], ['biceps', H(0.5, e)], ['midback', H(0.3, e)]] });
   S['straight-arm-pulldown'] = {
     phases: PH('Sweep down', 'Return', { d: [1.4, 0.6, 2.0, 0.4], hold: 'Squeeze' }), cam: { S: 2.45, y0: 568, dx: 4 }, theta: -80, range: [-100, -10],
