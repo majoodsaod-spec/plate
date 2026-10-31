@@ -23,7 +23,7 @@
     else if (kind === 'bw') body = `${w('reps', 'reps', 'reps')}<i>+</i>${w('extra kg', 'kg', '+ kg (opt.)', 0.5)}`;
     else if (kind === 'hold') body = `${w('seconds', 'sec', 'seconds')}<i>+</i>${w('extra kg', 'kg', '+ kg (opt.)', 0.5)}`;
     else body = `${w('kg', 'kg', 'kg', 0.5)}<i>×</i>${w('metres', 'm', 'metres')}`;
-    return `<div class="srow" data-r="${i}"><b>${i + 1}</b>${body}<button type="button" class="link" data-rmset="${i}" aria-label="Remove set ${i + 1}">✕</button></div>`;
+    return `<div class="srow${s.done ? ' done' : ''}" data-r="${i}"${s.done ? ' data-done="1"' : ''}><button type="button" class="setNo" data-setdone="${i}" aria-label="Set ${i + 1} done, start rest timer" aria-pressed="${s.done ? 'true' : 'false'}">${s.done ? '✓' : i + 1}</button>${body}<button type="button" class="link" data-rmset="${i}" aria-label="Remove set ${i + 1}">✕</button></div>`;
   }
   function block(e, i) {
     const x = MAP[e.id]; if (!x) return '';
@@ -43,7 +43,7 @@
     cur.entries.forEach((e, i) => {
       const b = q(`.lblock[data-i="${i}"]`); if (!b) return;
       if (e.kind === 'cardio') b.querySelectorAll('[data-f]').forEach((el) => { e.f[el.dataset.f] = el.tagName === 'SELECT' ? el.value : el.value; });
-      else e.sets = [...b.querySelectorAll('.srow')].map((r) => { const s = {}; r.querySelectorAll('[data-s]').forEach((el) => { s[el.dataset.s] = el.value === '' ? null : +el.value; }); return s; });
+      else e.sets = [...b.querySelectorAll('.srow')].map((r) => { const s = {}; r.querySelectorAll('[data-s]').forEach((el) => { s[el.dataset.s] = el.value === '' ? null : +el.value; }); if (r.dataset.done) s.done = true; return s; });
     });
   }
   const filled = (e) => e.kind === 'cardio' ? !!(+e.f.min || (+e.f.rounds)) : e.sets.some((s) => (s.reps > 0) || (s.sec > 0) || (s.m > 0));
@@ -55,13 +55,19 @@
     dlg.addEventListener('change', (e) => { if (e.target.id === 'glType') { read(); cur.entries = [customEntry(e.target.value, cur.name)]; render(); } });
     dlg.addEventListener('click', async (e) => {
       if (e.target === dlg) { dlg.close(); return; }
-      const g = e.target.closest('[data-gl]'), a = e.target.closest('[data-addset]'), r = e.target.closest('[data-rmset]');
+      const g = e.target.closest('[data-gl]'), a = e.target.closest('[data-addset]'), r = e.target.closest('[data-rmset]'), sd = e.target.closest('[data-setdone]');
+      if (sd) {                                   // tick a set off: it turns green and the rest timer starts with this exercise's rest
+        read(); const b = sd.closest('.lblock'), en = cur.entries[+b.dataset.i], st = en.sets[+sd.dataset.setdone]; st.done = !st.done; render();
+        if (st.done && window.GymProgress) { const more = en.sets.some((x) => !x.done); if (more || cur.entries.indexOf(en) < cur.entries.length - 1) GymProgress.rest(+en.rest || 90, MAP[en.id] ? MAP[en.id].name : ''); }
+        else if (window.GymProgress) GymProgress.stopRest();
+        return;
+      }
       if (a) { read(); const en = cur.entries[+a.dataset.addset], l = en.sets[en.sets.length - 1] || {}; en.sets.push({ ...l }); render(); return; }
       if (r) { read(); const b = r.closest('.lblock'), en = cur.entries[+b.dataset.i]; en.sets.splice(+r.dataset.rmset, 1); render(); return; }
       if (!g) return;
       if (g.dataset.gl === 'close') dlg.close();
       if (g.dataset.gl === 'save') {
-        read(); const use = cur.entries.map((en) => en.kind === 'cardio' ? en : { ...en, sets: en.sets.filter((s) => s.reps > 0 || s.sec > 0 || s.m > 0) }).filter(filled);
+        read(); const use = cur.entries.map((en) => en.kind === 'cardio' ? en : { ...en, sets: en.sets.filter((s) => s.reps > 0 || s.sec > 0 || s.m > 0).map(({ done, ...x }) => x) }).filter(filled);
         if (!use.length) { cur.err = 'Enter at least one set or a time first.'; q('#glErr').textContent = cur.err; return; }
         g.disabled = true; const done = cur.onSave; try { await done(use); dlg.close(); } finally { g.disabled = false; }
       }
@@ -85,11 +91,11 @@
       if (kind === 'cardio') { const f = {}; Burn.FORMS[it.id].forEach((fd) => { f[fd.k] = last && last.f && last.f[fd.k] != null ? last.f[fd.k] : fd.def; }); if (it.dur && f.min !== undefined) f.min = firstNum(String(it.dur).split(/[–-]/).pop()) || f.min; return { id: it.id, kind, f, last }; }
       const n = Math.max(1, Math.min(8, +it.sets || 3)), reps = firstNum(it.reps), base = last && last.sets && last.sets[0] ? last.sets[0] : {};
       const mk = () => kind === 'hold' ? { sec: base.sec || 30, kg: base.kg || null } : kind === 'carry' ? { kg: base.kg || null, m: base.m || 30 } : kind === 'bw' ? { reps, kg: base.kg || null } : { kg: base.kg || null, reps };
-      return { id: it.id, kind, last, rest: it.rest, sets: Array.from({ length: n }, mk) };
+      return { id: it.id, kind, last, rest: +it.rest || (x.type === 'compound' ? 120 : 75), sets: Array.from({ length: n }, mk) };
     });
     cur = { entries, onSave: o.onSave, err: '' };
     q('#glTitle').textContent = o.title || 'Log workout';
-    q('#glSub').textContent = entries.some((e) => e.kind !== 'cardio') ? 'Enter what you actually did. Remove sets you skipped with ✕.' : 'Enter what your machine or watch shows.';
+    q('#glSub').textContent = entries.some((e) => e.kind !== 'cardio') ? 'Enter what you actually did. Tap a set\'s number when you finish it to start the rest timer. Remove sets you skipped with ✕.' : 'Enter what your machine or watch shows.';
     render(); dlg.showModal();
   }
   window.GymLog = { open, openCustom, MAP };

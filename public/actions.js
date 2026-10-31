@@ -146,7 +146,7 @@
   const GP = () => (root.Plate && root.Plate.gymPlan) || fail('the gym tab is not ready yet');
   const exMap = () => root.GymLog.MAP;
   async function gymLog() { return ((await DB.get('gymLog', [])) || []).slice(); }
-  const saveLog = (l) => DB.set('gymLog', l.slice(-150));
+  const saveLog = (l) => DB.set('gymLog', l.slice(-600));
   const num0 = (v, lo, hi, what) => { if (v == null || v === '') return null; const n = rng(v, lo, hi); if (n == null) fail(what + ' must be ' + lo + ' to ' + hi); return n; };
 
   /* one logged exercise, checked against what that exercise measures (same shapes the log sheet saves) */

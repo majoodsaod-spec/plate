@@ -44,7 +44,7 @@
       return {
         H: Hh, a: 2, sh: [0, 0], barHands: true, leg: (s) => ({ A: [s * 14, ay, 2], pole: [0, 0, 1], pitch: pt }),
         arm: (s) => ({ W: [s * 38, bar[1] - 1, bar[2] - 1], pole: [0, -1, -0.45] }),
-        props: barProps(bar, { half: 62, R: 13, th: 4.5 }).concat([-1, 1].map((s) => P.cap('eq', [s * 74, 0, 1], 2.4, [s * 74, 215, 1], 2.4, 'back')), [P.box('eq', -26, 26, 0, 6, -10, 16, 'back'), P.box('eq', -80, 80, 0, 3, -20, 24, 'back')]),
+        props: barProps(bar, { half: 70, R: 13, th: 4.5 }).concat([P.box('eq', -26, 26, 0, 6, -10, 16, 'back')], X.smithFrame ? X.smithFrame(bar) : []),
         hot: [['calves', H(1, e)]],
       };
     },

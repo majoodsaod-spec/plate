@@ -9,7 +9,8 @@ Three pieces: the **app** (static files), the **server** (one Cloudflare Worker)
 ## 2. Server (Worker)
 1. Workers & pages -> your `plate-proxy` Worker -> Edit code -> replace everything with `worker/worker.js` -> Deploy.
 2. Worker -> Bindings -> Add -> D1 database -> Variable name `DB` -> pick `plate-db` -> Deploy.
-3. Worker -> Settings -> Trigger events -> Cron Triggers -> Add -> `0 9 * * *` (09:00 UTC = 12:00 in Qatar). This is the daily backup.
+3. Worker -> Settings -> Trigger events -> Cron Triggers -> Add -> `*/15 * * * *` (every 15 minutes: reminders, plus the daily backup at 09:00 UTC = 12:00 in Qatar). Remove the old `0 9 * * *` trigger if you have it.
+   The reminder and steps tables are created automatically the first time they are used.
 4. Secrets (Settings -> Variables and Secrets): `GEMINI_API_KEY` (required), `GROQ_API_KEY`, `TAVILY_API_KEY`, `FDC_API_KEY` (optional), `INVITE_CODE` (recommended: people need this code to create an account, so strangers cannot use your free AI quota).
    `PLATE_PASSPHRASE` is no longer used; delete it.
 5. Optional variables: `AI_DAILY_LIMIT` (AI requests per person per day, default 150), `BACKUP_DAYS` (default 30), `ALLOWED_ORIGIN` (your app address).

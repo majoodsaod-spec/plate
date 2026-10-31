@@ -260,7 +260,8 @@
       <div class="card" id="gpBurn">${burnCard()}</div>
       <div class="card"><div class="sectionHead" style="padding:0"><h2>Last 7 days</h2><span class="hint">${st.log.filter((l) => !l.other && lastDays(7).includes(l.date)).length} workouts</span></div>
         <div class="chips tiny">${ALL_MUSCLES.filter((m) => m !== 'cardio').map((m) => `<span class="mchip${tr.has(m) ? ' on' : ''}">${esc(GROUPS[m].name)}</span>`).join('')}</div>
-        <p class="hint">Highlighted muscles were trained in a workout you logged. Log workouts with "Log workout".</p></div>`;
+        <p class="hint">Highlighted muscles were trained in a workout you logged. Log workouts with "Log workout".</p></div>
+      <div class="card" id="gpProg">${window.GymProgress ? GymProgress.card(st.log, GymLog.MAP) : ''}</div>`;
     $('#gpAskIn').style.height = 'auto';
   }
   function burnCard() {
@@ -503,9 +504,10 @@ ${catalogue()}`;
   /* ---------- events ---------- */
   function useWorkout(w) { st.cur = w; saveCur(); }
   async function saveSession(entries, label, groups, ids) {
-    const b = await Burn.session(entries, GymLog.MAP);
+    const b = await Burn.session(entries, GymLog.MAP), rec = window.GymProgress ? GymProgress.prs(st.log, entries, GymLog.MAP) : [];
     st.log.push({ date: DB.dayKey(), ts: Date.now(), label, groups, ids, mins: b ? b.mins : null, kcal: b ? b.kcal : null, sub: b ? b.sub : '', detail: entries });
-    st.log = st.log.slice(-150); await DB.set('gymLog', st.log); renderPlan(); refreshToday();
+    st.log = st.log.slice(-600); await DB.set('gymLog', st.log); renderPlan(); refreshToday();
+    if (rec.length) window.Plate.toast('🏆 New record' + (rec.length > 1 ? 's' : '') + ': ' + rec.join(' · '));
     if (!b) err('Add your weight in Today > Goals to see calories burned.'); else err('');
   }
   function logDone() {
@@ -526,7 +528,7 @@ ${catalogue()}`;
     const t = $('#gpActType').value, m = +$('#gpActMin').value; st.actType = t; st.actMin = m;
     const b = await Burn.activity(t, m);
     st.log.push({ date: DB.dayKey(), ts: Date.now(), label: Burn.ACTIVITIES.find((a) => a[0] === t)[1], groups: [], ids: [], other: true, mins: m, kcal: b ? b.kcal : null });
-    st.log = st.log.slice(-150); await DB.set('gymLog', st.log); renderPlan(); refreshToday();
+    st.log = st.log.slice(-600); await DB.set('gymLog', st.log); renderPlan(); refreshToday();
   }
   async function removeLog(ts) {
     const gone = st.log.find((l) => l.ts === ts);

@@ -394,7 +394,7 @@
       return { lo, hi };
     };
     const autoSort = (q) => {
-      if (sx.noSort || root.__nosortTest || q.layer !== 'back' || q.t === 'line' || q.cls === 'shadow') return null;
+      if (sx.noSort || root.__nosortTest || q.bg || q.layer !== 'back' || q.t === 'line' || q.cls === 'shadow') return null;
       const bb = bboxOf(q); if (!bb) return null;
       const dx = bb.hi[0] - bb.lo[0], dy = bb.hi[1] - bb.lo[1], dz = bb.hi[2] - bb.lo[2];
       if (bb.hi[1] < 14) return null;                                       // on the floor

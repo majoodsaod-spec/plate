@@ -7,6 +7,22 @@
   const SQ_PH = [{ name: 'Descend', dur: 1.9, from: 0, to: 1, e: [0.35, 0.55] }, { name: 'Bottom', dur: 0.4, from: 1, to: 1, e: [0.55, 0.7] }, { name: 'Drive up', dur: 1.4, from: 1, to: 0, e: [0.7, 1] }, { name: 'Stand', dur: 0.4, from: 0, to: 0, e: [0.6, 0.3] }];
   const quadHot = (e, k) => [['quads', H(k || 1, e)], ['glutes', H(0.6, e)]];
   const smithRails = [-1, 1].map((s) => P.cap('eq', [s * 74, 0, 3], 2.4, [s * 74, 210, 3], 2.4, 'back')).concat([P.box('eq', -80, 80, 0, 4, -20, 24, 'back')]);
+  /* a Smith machine like a gym's: a frame of square posts with a top crossbar, guide rods, and the bar riding on sleeves with hooks to rack it */
+  const smithFrame = (bar, zc) => {
+    zc = zc != null ? zc : bar ? bar[2] : 3; const Z = (a, b) => [zc + a - 3, zc + b - 3];
+    const B = (x0, x1, y0, y1, za, zb) => { const z = Z(za, zb); return P.box('eq', x0, x1, y0, y1, z[0], z[1], 'back'); };
+    const o = [B(-84, 84, 0, 4, -26, 30), B(-84, -76, 4, 222, -24, -16), B(76, 84, 4, 222, -24, -16), B(-84, 84, 216, 222, -24, -16),
+      B(-84, -78, 216, 222, -16, 24), B(78, 84, 216, 222, -16, 24), B(-84, -78, 4, 216, 18, 24), B(78, 84, 4, 216, 18, 24)];
+    [-1, 1].forEach((s) => {
+      o.push(P.cap('gbar', [s * 74, 4, zc], 1.4, [s * 74, 216, zc], 1.4, 'back'));
+      if (bar) { o.push(P.box('eq2', s * 74 - 3.5, s * 74 + 3.5, bar[1] - 7, bar[1] + 7, bar[2] - 3.5, bar[2] + 3.5, 'back'));
+        o.push(P.cap('eq', [s * 66, bar[1], bar[2] - 1], 1.3, [s * 66, bar[1] + 6, bar[2] - 5], 1.3, 'back')); }
+      [40, 80, 120, 160].forEach((y) => o.push(P.box('eq2', s * 81 - 2.5, s * 81 + 2.5, y - 1.5, y + 1.5, zc - 16, zc - 13, 'back')));
+    });
+    o.forEach((q) => { if (q.layer === 'back') q.bg = true; });   // the frame stays behind the lifter, so it never hides the movement
+    return o;
+  };
+  X.smithFrame = smithFrame;
 
   /* ---------- squats with a bar ---------- */
   const barSquat = (o) => ({
@@ -19,7 +35,7 @@
         H: [0, hy, hz], a, barHands: true,
         leg: (s) => ({ A: [s * 17, ankleY(0), o.ank || 3], pole: [s * 0.2, 0, 1], pitch: 0 }),
         arm: (s) => o.front ? { W: [s * 22, bar[1] + 1, bar[2] + 3], pole: [0, 1, 0.4] } : { W: [s * 38, bar[1] - 1, bar[2] - 1], pole: [0, -1, -0.45] },
-        props: barProps(bar, { half: 62, R: 13, th: 4.5 }).concat(o.smith ? smithRails : []),
+        props: barProps(bar, { half: o.smith ? 70 : 62, R: 13, th: 4.5 }).concat(o.smith ? smithFrame(bar) : []),
         hot: quadHot(e, 1),
       };
     },
@@ -61,13 +77,50 @@
       return {
         H: Hh, a, sh: [0, 0], barHands: true, leg: (s) => ({ A: [s * 17, ankleY(0), 12], pole: [s * 0.2, 0, 1], pitch: 0 }),
         arm: (s) => ({ W: [s * 24, Hh[1] + 40, Hh[2] + 22 * Math.abs(Math.sin(ar)) + 4], pole: [s * 0.4, -0.3, 0.5] }),
-        props: [pad, P.cap('eq', [-26, 0, 28], 2.6, [-26, 170, -100], 2.6, 'back'), P.cap('eq', [26, 0, 28], 2.6, [26, 170, -100], 2.6, 'back'), P.box('eq', -30, 30, 0, 5, 0, 32, 'back'), P.slab('eq', [0, 3, 6], [0, 3, 34], 46, 4, 'back')],
+        props: hackMachine(Hh, u, zx, o, (s) => [s * 24, Hh[1] + 40, Hh[2] + 22 * Math.abs(Math.sin(ar)) + 4]).concat([pad]),
         hot: quadHot(e, 1),
       };
     },
   });
+  /* the rest of a hack or pendulum squat: square rails on a base frame, a rear upright, the carriage with shoulder pads, handles and
+     plate horns loaded with plates, and the angled foot platform. The pendulum hangs its carriage from a pivot arm instead of rails. */
+  function hackMachine(Hh, u, zx, o, hand) {
+    const out = [P.box('eq', -36, 36, 0, 5, -112, 40, 'back'), P.slab('eq', [0, 2, 4], [0, 9, 40], 34, 4, 'back')];
+    const top = o.a ? null : true;
+    [-1, 1].forEach((s) => {
+      if (top) out.push(P.slab('eq', [s * 28, 4, 30], [s * 28, 172, -102], 2.6, 5, 'back'));
+      out.push(P.box('eq', s * 28 - 3, s * 28 + 3, 4, 178, -110, -102, 'back'));
+      out.push(P.cap('pad', add(Hh, add(add(mul(u, 58), mul(zx, -8)), [s * 10, 0, 0])), 3.6, add(Hh, add(add(mul(u, 56), mul(zx, 4)), [s * 10, 0, 0])), 3.6, 'back'));
+      const hb = add(Hh, add(mul(u, 14), mul(zx, -13)));
+      out.push(P.cap('eq2', add(hb, [s * 36, 0, 0]), 1.8, add(hb, [s * 50, 0, 0]), 1.8, 'back'), P.disc('eq2', add(hb, [s * 42, 0, 0]), 'x', 14, 3.2, 'back'), P.disc('eq2', add(hb, [s * 46, 0, 0]), 'x', 11, 3.2, 'back'));
+      out.push(P.slab('eq', add(Hh, add(mul(u, -6), mul(zx, -13))), add(Hh, add(mul(u, 50), mul(zx, -13))), 0.1, 3, 'back'));
+      const W = hand(s); out.push(P.cap('gbar', add(W, [-s * 4, 0, 0]), 1.6, add(W, [s * 7, 0, 0]), 1.6, s === 1 ? 'near' : 'far'), P.cap('eq', add(W, [s * 7, 0, 0]), 1.6, add(add(Hh, add(mul(u, 40), mul(zx, -12))), [s * 30, 0, 0]), 1.6, 'back'));
+    });
+    out.push(P.box('eq', -31, 31, 172, 178, -110, -102, 'back'));
+    if (!top) {                                    // pendulum: an arm from a pivot at the top rear down to the carriage
+      const piv = [0, 160, -96], cb = add(Hh, add(mul(u, 30), mul(zx, -14)));
+      [-1, 1].forEach((s) => out.push(P.slab('eq', add(piv, [s * 30, 0, 0]), add(cb, [s * 30, 0, 0]), 2.4, 5, 'back')));
+      out.push(P.disc('eq2', [32, 160, -96], 'x', 6, 4, 'back'), P.disc('eq2', [-32, 160, -96], 'x', 6, 4, 'back'), P.box('eq', -34, 34, 156, 164, -100, -92, 'back'));
+    }
+    return out;
+  }
   S['hack-squat'] = hack({});
   S['pendulum-squat'] = hack({ a: -22 });
+  /* a 45-degree leg press: square rails on a long base, the seat on its frame, side handles, and the sled behind the foot plate with
+     plate horns that ride up and down with it */
+  function legPressFrame(Hh, A0, Ae, d, n) {
+    const out = [P.box('eq', -42, 42, 0, 5, -96, 60, 'back'), P.box('eq', -18, 18, 5, 24, -70, -24, 'back'), P.slab('eq', [0, 26, -66], [0, 30, -24], 20, 5, 'back')];
+    const sled = add(A0, mul(n, 12));
+    out.push(P.slab('eq', add(sled, mul(d, -30)), add(sled, mul(d, 30)), 30, 6, 'back'));
+    [-1, 1].forEach((s) => {
+      out.push(P.slab('eq', [s * 32, 4, -34], add(Ae, [s * 32, 8, 40]), 2.6, 5, 'back'));
+      out.push(P.box('eq', s * 32 - 3, s * 32 + 3, 4, Ae[1] + 14, Ae[2] + 36, Ae[2] + 42, 'back'));
+      const hb = add(sled, mul(d, -14));
+      out.push(P.cap('eq2', add(hb, [s * 30, 0, 0]), 1.8, add(hb, [s * 58, 0, 0]), 1.8, 'back'), P.disc('eq2', add(hb, [s * 46, 0, 0]), 'x', 14, 3.4, 'back'), P.disc('eq2', add(hb, [s * 50, 0, 0]), 'x', 14, 3.4, 'back'), P.disc('eq2', add(hb, [s * 54, 0, 0]), 'x', 10, 3, 'back'));
+      out.push(P.cap('gbar', [s * 26, 44, -62], 1.6, [s * 26, 44, -44], 1.6, s === 1 ? 'near' : 'far'), P.box('eq', s * 26 - 2, s * 26 + 2, 24, 43, -64, -60, 'back'));
+    });
+    return out;
+  }
   const legPress = (calf) => ({
     phases: [{ name: 'Lower the sled', dur: 1.9, from: 0, to: 1, e: [0.35, 0.55] }, { name: 'Bottom', dur: 0.4, from: 1, to: 1, e: [0.55, 0.7] }, { name: 'Press', dur: 1.4, from: 1, to: 0, e: [0.7, 1] }, { name: 'Lockout', dur: 0.4, from: 0, to: 0, e: [0.6, 0.3] }],
     cam: { S: 2.0, y0: 520, dx: -30 }, theta: -85, range: [-100, -20], shadow: { c: [0, 0, 10], rx: 70, rz: 100 },
@@ -81,8 +134,7 @@
         H: Hh, a, sh: [0, 0], barHands: true,
         leg: (s) => ({ A: add(A0, [s * 17, 0, 0]), pole: [s * 0.15, 1, 0.1], pitch: calf ? 38 - lerp(0, 46, p) : 38 }),
         arm: (s) => ({ W: [s * 26, 44, -52], pole: [s * 0.3, -1, 0] }),
-        props: [P.slab('eq', add(Hh, add(mul(u, -10), mul(zx, -8))), add(Hh, add(mul(u, 62), mul(zx, -8))), 38, 8, 'back'), plate,
-          P.cap('eq', [-30, 0, -30], 2.4, add(Ae, [-30, 6, 36]), 2.4, 'back'), P.cap('eq', [30, 0, -30], 2.4, add(Ae, [30, 6, 36]), 2.4, 'back'), P.box('eq', -36, 36, 0, 4, -70, 24, 'back')],
+        props: [P.slab('eq', add(Hh, add(mul(u, -10), mul(zx, -8))), add(Hh, add(mul(u, 62), mul(zx, -8))), 38, 8, 'back'), plate].concat(legPressFrame(Hh, A0, Ae, d, n)),
         hot: calf ? [['calves', H(1, e)]] : quadHot(e, 1),
       };
     },

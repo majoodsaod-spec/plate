@@ -1,8 +1,9 @@
 /* Plate proxy (Cloudflare Worker). Holds your AI keys; the phone never sees them.
-   Binding:    DB (a Cloudflare D1 database; see schema.sql)       Cron: 0 9 * * *  (09:00 UTC = 12:00 in Qatar, the daily backup)
+   Binding:    DB (a Cloudflare D1 database; see schema.sql)       Cron: every 15 minutes (reminders; the daily backup runs in the 09:00 UTC slot = 12:00 in Qatar)
    Secrets:    GEMINI_API_KEY      (GROQ_API_KEY, TAVILY_API_KEY, FDC_API_KEY optional)   INVITE_CODE (optional: people need it to create an account)
    Variables:  ALLOWED_ORIGIN (optional, lock CORS to your app), AI_DAILY_LIMIT (default 150 per person), BACKUP_DAYS (default 30), PBKDF2_ITER (default 100000)
-   Routes:     POST /auth/*  (accounts)   GET|POST /sync/*  (data)   /backups  (daily copies)   POST /  (AI, needs a signed-in session)
+   Routes:     POST /auth/*  (accounts)   GET|POST /sync/*  (data)   /backups  (daily copies)   /push/*  (reminders)   /hook/*  (steps from an iPhone Shortcut)
+               POST /  (AI, needs a signed-in session)
 
    Request from the app (provider-neutral):
      { task: 'log'|'recipe'|'nutrition'|'test', system, history:[{role:'user'|'model', text}], text, images:[base64 jpeg], json:bool, max_tokens }
@@ -14,7 +15,13 @@ const MAX_IMAGES = 2;
 const TASKS = new Set(['log', 'recipe', 'nutrition', 'test', 'lookup', 'check', 'ask', 'nutrients', 'coach']);
 
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(runBackups(env)); },
+  async scheduled(event, env, ctx) {
+    const d = new Date(event.scheduledTime || Date.now()), daily = event.cron === '0 9 * * *' || (d.getUTCHours() === 9 && d.getUTCMinutes() < 15);
+    ctx.waitUntil((async () => {
+      try { await migrate(env); await runReminders(env, d.getTime()); } catch (e) { console.log('reminders failed', e.message); }
+      if (daily) await runBackups(env);
+    })());
+  },
   async fetch(req, env) {
     const origin = req.headers.get('origin') || '';
     const allow = env.ALLOWED_ORIGIN || '*';
@@ -31,7 +38,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (!env.DB) return fail('The database is not connected to this Worker yet (binding DB).', 500);
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
-    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups')) {
+    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups') || path.startsWith('/push/') || path.startsWith('/hook/')) {
       try { return await accounts(req, env, path, reply, fail); } catch (e) { return fail('Server error: ' + e.message, 500); }
     }
     if (req.method !== 'POST') return fail('POST only', 405);
@@ -591,8 +598,51 @@ async function accounts(req, env, path, reply, fail) {
     return reply({ token: await makeSession(env, u.id, body.device), user: { id: u.id, email: u.email }, isNew });
   }
 
+  /* steps from the iPhone Shortcut: no session, just the private link's key */
+  if (path === '/hook/steps') {
+    await migrate(env);
+    const k = url.searchParams.get('k') || body.k || '';
+    if (!/^[A-Za-z0-9_-]{20,80}$/.test(k)) return fail('Missing or bad link. Copy it again from Plate.', 400);
+    const h = await env.DB.prepare('SELECT user_id, tz FROM hooks WHERE key_hash = ?').bind(await sha(k)).first();
+    if (!h) return fail('This link is no longer valid. Make a new one in Plate.', 403);
+    const raw = body.steps != null ? body.steps : url.searchParams.get('steps');
+    const n = Math.round(parseFloat(String(raw == null ? '' : raw).replace(/[^\d.]/g, '')));
+    if (!(n >= 0) || n > 150000) return fail('No step count found. In the Shortcut, the JSON field must be called steps.', 400);
+    const now = Date.now(), date = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || '')) ? body.date : localDay(now, h.tz), key = 'steps:' + date;
+    await env.DB.prepare('INSERT INTO rows (user_id, store, key, value, deleted, updated) VALUES (?,?,?,?,0,?) ON CONFLICT(user_id, store, key) DO UPDATE SET value = excluded.value, deleted = 0, updated = excluded.updated')
+      .bind(h.user_id, 'kv', key, JSON.stringify({ key, value: { steps: n, src: 'shortcut', ts: now } }), now).run();
+    return reply({ ok: true, steps: n, date });
+  }
+
   const user = await authed(req, env);
   if (!user) return fail('unauthorized', 401);
+
+  if (path.startsWith('/push/') || path.startsWith('/hook/')) {
+    await migrate(env);
+    if (path === '/hook/new' && req.method === 'POST') {
+      const k = b64(rnd(24)), tzm = clampTz(body.tz);
+      await env.DB.batch([env.DB.prepare('DELETE FROM hooks WHERE user_id = ?').bind(user.id),
+        env.DB.prepare('INSERT INTO hooks (key_hash, user_id, tz, created) VALUES (?,?,?,?)').bind(await sha(k), user.id, tzm, Date.now())]);
+      return reply({ url: url.origin + '/hook/steps?k=' + k });
+    }
+    if (path === '/push/key') return reply({ key: (await vapid(env)).pub });
+    if (path === '/push/sub' && req.method === 'POST') {
+      const s = body.sub || {}, ep = String(s.endpoint || ''), keys = s.keys || {};
+      if (!/^https:\/\//.test(ep) || ep.length > 1000 || !keys.p256dh || !keys.auth) return fail('Bad subscription', 400);
+      const prefs = JSON.stringify(body.prefs || {}).slice(0, 4000);
+      await env.DB.prepare('INSERT INTO push_subs (endpoint, user_id, p256dh, auth, prefs, tz, sent, created) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, prefs = excluded.prefs, tz = excluded.tz')
+        .bind(ep, user.id, String(keys.p256dh), String(keys.auth), prefs, clampTz(body.tz), '{}', Date.now()).run();
+      await env.DB.prepare('UPDATE hooks SET tz = ? WHERE user_id = ?').bind(clampTz(body.tz), user.id).run();
+      return reply({ ok: true });
+    }
+    if (path === '/push/unsub' && req.method === 'POST') { await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?').bind(String(body.endpoint || ''), user.id).run(); return reply({ ok: true }); }
+    if (path === '/push/test' && req.method === 'POST') {
+      const r = await env.DB.prepare('SELECT * FROM push_subs WHERE user_id = ?').bind(user.id).all(); let sent = 0;
+      for (const s of r.results || []) { const st = await webPush(env, s, { title: 'Plate', body: 'Reminders are working. 👍', tag: 'test', tab: 'today' }); if (st >= 200 && st < 300) sent++; else if (st === 404 || st === 410) await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ?').bind(s.endpoint).run(); }
+      return reply({ ok: true, sent });
+    }
+    return fail('Not found', 404);
+  }
 
   if (path === '/auth/me') return reply({ user: { id: user.id, email: user.email } });
   if (path === '/auth/logout' && req.method === 'POST') { await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(user.th).run(); return reply({ ok: true }); }
@@ -672,4 +722,127 @@ async function runBackups(env) {
   await env.DB.prepare("DELETE FROM backups WHERE day GLOB '[0-9]*' AND day < ?").bind(new Date(Date.now() - keep * DAY).toISOString().slice(0, 10)).run();
   await env.DB.prepare('DELETE FROM sessions WHERE expires < ?').bind(Date.now()).run();
   await env.DB.prepare('DELETE FROM attempts WHERE t < ?').bind(Date.now() - 86400000).run();
+}
+
+
+/* ===================== reminders (Web Push) and steps ===================== */
+let migrated = false;
+async function migrate(env) {
+  if (migrated) return;
+  await env.DB.batch([
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, prefs TEXT NOT NULL, tz INTEGER NOT NULL DEFAULT 180, sent TEXT NOT NULL DEFAULT \'{}\', created INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS push_user ON push_subs (user_id)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS hooks (key_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, tz INTEGER NOT NULL DEFAULT 180, created INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)'),
+  ]);
+  migrated = true;
+}
+const clampTz = (t) => { t = Math.round(Number(t)); return isFinite(t) && Math.abs(t) <= 14 * 60 ? t : 180; };
+/* the user's calendar day and clock, from their UTC offset in minutes */
+const localDate = (ms, tz) => new Date(ms + tz * 60000);
+const localDay = (ms, tz) => localDate(ms, tz).toISOString().slice(0, 10);
+
+/* the server's own VAPID key pair: made once, kept in the database (nothing to set up) */
+let VAPID = null;
+async function vapid(env) {
+  if (VAPID) return VAPID;
+  await migrate(env);
+  const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'vapid'").first();
+  if (r) { const j = JSON.parse(r.v); VAPID = { pub: j.pub, key: await crypto.subtle.importKey('jwk', j.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']) }; return VAPID; }
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey), pub = b64(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)));
+  await env.DB.prepare("INSERT OR IGNORE INTO meta (k, v) VALUES ('vapid', ?)").bind(JSON.stringify({ jwk, pub })).run();
+  VAPID = null; return vapid(env);            // re-read, in case two requests raced
+}
+const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; a.forEach((x) => { o.set(x, i); i += x.length; }); return o; };
+async function hmac(key, data) { const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return new Uint8Array(await crypto.subtle.sign('HMAC', k, data)); }
+/* RFC 8291 (aes128gcm) encryption of the message for one browser */
+async function encryptPush(p256dh, authSecret, payload) {
+  const ua = unb64(p256dh), auth = unb64(authSecret);
+  const as = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const asPub = new Uint8Array(await crypto.subtle.exportKey('raw', as.publicKey));
+  const uaKey = await crypto.subtle.importKey('raw', ua, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, as.privateKey, 256));
+  const ikm = await hmac(await hmac(auth, shared), cat(enc.encode('WebPush: info\0'), ua, asPub, new Uint8Array([1])));
+  const salt = rnd(16), prk = await hmac(salt, ikm);
+  const cek = (await hmac(prk, cat(enc.encode('Content-Encoding: aes128gcm\0'), new Uint8Array([1])))).slice(0, 16);
+  const nonce = (await hmac(prk, cat(enc.encode('Content-Encoding: nonce\0'), new Uint8Array([1])))).slice(0, 12);
+  const key = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, cat(enc.encode(payload), new Uint8Array([2]))));
+  const head = new Uint8Array(21); head.set(salt, 0); new DataView(head.buffer).setUint32(16, 4096); head[20] = 65;
+  return cat(head, asPub, ct);
+}
+async function webPush(env, sub, msg) {
+  const v = await vapid(env), aud = new URL(sub.endpoint).origin, now = Math.floor(Date.now() / 1000);
+  const part = (o) => b64(enc.encode(JSON.stringify(o)));
+  const unsigned = part({ typ: 'JWT', alg: 'ES256' }) + '.' + part({ aud, exp: now + 12 * 3600, sub: 'mailto:plate-reminders@example.com' });
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, v.key, enc.encode(unsigned)));
+  const body = await encryptPush(sub.p256dh, sub.auth, JSON.stringify(msg));
+  try {
+    const r = await fetch(sub.endpoint, { method: 'POST', body, headers: { authorization: `vapid t=${unsigned}.${b64(sig)}, k=${v.pub}`, 'content-encoding': 'aes128gcm', 'content-type': 'application/octet-stream', ttl: '3600', urgency: 'normal' } });
+    return r.status;
+  } catch (e) { return 0; }
+}
+
+/* every 15 minutes: for each phone, any reminder whose time has come (in the last hour, not yet sent today) is checked against what was logged */
+const hm = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '')); return m ? +m[1] * 60 + +m[2] : -1; };
+async function kvGet(env, uid, key) { const r = await env.DB.prepare("SELECT value FROM rows WHERE user_id = ? AND store = 'kv' AND key = ? AND deleted = 0").bind(uid, key).first(); try { return r ? JSON.parse(r.value).value : null; } catch (e) { return null; } }
+async function runReminders(env, nowMs) {
+  const r = await env.DB.prepare('SELECT * FROM push_subs').all();
+  for (const s of r.results || []) {
+    try {
+      let p = {}, sent = {}; try { p = JSON.parse(s.prefs || '{}'); } catch (e) {} try { sent = JSON.parse(s.sent || '{}'); } catch (e) {}
+      const L = localDate(nowMs, s.tz), today = L.toISOString().slice(0, 10), mins = L.getUTCHours() * 60 + L.getUTCMinutes(), dow = L.getUTCDay();
+      const startOfDay = nowMs - mins * 60000 - L.getUTCSeconds() * 1000;
+      const due = (t) => { const m = hm(t); return m >= 0 && mins >= m && mins < m + 60; };
+      const slots = [];
+      if (p.meals && p.meals.on) (p.meals.times || []).forEach((t, i) => slots.push({ id: 'meal' + i, t, kind: 'meal', i }));
+      if (p.water && p.water.on) (p.water.times || []).forEach((t, i) => slots.push({ id: 'water' + i, t, kind: 'water' }));
+      if (p.weight && p.weight.on && (p.weight.days || []).includes(dow)) slots.push({ id: 'weight', t: p.weight.time, kind: 'weight' });
+      if (p.workout && p.workout.on) slots.push({ id: 'workout', t: p.workout.time, kind: 'workout' });
+      if (p.steps && p.steps.on) slots.push({ id: 'steps', t: p.steps.time, kind: 'steps' });
+      let changed = false;
+      for (const sl of slots) {
+        if (!due(sl.t) || sent[sl.id] === today) continue;
+        sent[sl.id] = today; changed = true;
+        const msg = await reminderFor(env, s.user_id, sl, p, { today, mins, dow, startOfDay, nowMs });
+        if (!msg) continue;
+        const st = await webPush(env, s, msg);
+        if (st === 404 || st === 410) { await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ?').bind(s.endpoint).run(); changed = false; break; }
+      }
+      if (changed) await env.DB.prepare('UPDATE push_subs SET sent = ? WHERE endpoint = ?').bind(JSON.stringify(sent), s.endpoint).run();
+    } catch (e) { console.log('reminder failed', e.message); }
+  }
+}
+async function reminderFor(env, uid, sl, p, c) {
+  if (sl.kind === 'meal') {
+    const prev = sl.i > 0 ? hm((p.meals.times || [])[sl.i - 1]) : -1, since = c.startOfDay + Math.max(0, prev >= 0 ? prev : hm(sl.t) - 180) * 60000;
+    const m = await env.DB.prepare("SELECT COUNT(*) AS n FROM rows WHERE user_id = ? AND store = 'meals' AND deleted = 0 AND json_extract(value, '$.date') = ? AND json_extract(value, '$.ts') >= ?").bind(uid, c.today, since).first();
+    if (m && m.n > 0) return null;
+    const what = sl.i === 0 ? 'breakfast' : sl.i === 1 ? 'lunch' : 'dinner';
+    return { title: 'Log your ' + what, body: 'A quick photo or a few words is enough. It keeps today\'s numbers right.', tag: 'meal', tab: 'today' };
+  }
+  if (sl.kind === 'water') {
+    const ml = Number(await kvGet(env, uid, 'water:' + c.today)) || 0, goal = 2500, want = Math.round(goal * Math.min(1, Math.max(0, (c.mins - 7 * 60) / (15 * 60))));
+    if (ml >= want - 250) return null;
+    return { title: 'Time for some water', body: `${ml.toLocaleString()} of ${goal.toLocaleString()} ml so far today.`, tag: 'water', tab: 'today' };
+  }
+  if (sl.kind === 'weight') {
+    const w = await env.DB.prepare("SELECT 1 AS x FROM rows WHERE user_id = ? AND store = 'weights' AND key = ? AND deleted = 0").bind(uid, c.today).first();
+    if (w) return null;
+    return { title: 'Weigh in', body: 'Before breakfast, after the bathroom, is the most consistent time.', tag: 'weight', tab: 'insights' };
+  }
+  if (sl.kind === 'workout') {
+    const split = await kvGet(env, uid, 'gymSplit'), d = split && Array.isArray(split.days) ? split.days[c.dow] : null;
+    if (!d || d.t === 'rest') return null;
+    const log = (await kvGet(env, uid, 'gymLog')) || [];
+    if (Array.isArray(log) && log.some((l) => l && l.date === c.today && !l.other)) return null;
+    return { title: 'Training day', body: 'Your workout for today is ready in the Gym tab.', tag: 'workout', tab: 'gym' };
+  }
+  if (sl.kind === 'steps') {
+    const s = await kvGet(env, uid, 'steps:' + c.today);
+    if (s && s.steps > 0) return null;
+    return { title: 'Add your steps', body: 'Type today\'s steps on the Today tab.', tag: 'steps', tab: 'today' };
+  }
+  return null;
 }

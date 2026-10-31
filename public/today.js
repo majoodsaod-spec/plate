@@ -90,7 +90,7 @@
     $('#mealNote').innerHTML = (state.note ? esc(state.note) + ' ' : '') + conf;
     $('#mealItems').innerHTML = state.items.map((it, i) => `
       <div class="item">
-        <input class="nameIn" data-i="${i}" data-k="name" value="${esc(it.name)}" aria-label="Food name">
+        <input class="nameIn" data-i="${i}" data-k="name" value="${esc(it.name)}" aria-label="Food name" placeholder="Food name, e.g. chicken machboos">
         ${it.portion ? `<div class="portion">${esc(it.portion)}${it.basis === 'brand' ? ' · brand data' : it.basis === 'web' ? ' · web figures, approximate' : ''}</div>` : ''}
         <div class="amt"><label class="mini"><span>Amount (${UNIT_LABEL[it.unit] || 'servings'})</span><input inputmode="decimal" data-i="${i}" data-k="amount" value="${it.amount}"></label><small>Calories and macros follow the amount.</small></div>
         <div class="grid4">${field(i, 'kcal', 'kcal')}${field(i, 'protein', 'Protein g')}${field(i, 'carbs', 'Carbs g')}${field(i, 'fat', 'Fat g')}</div>
@@ -126,7 +126,7 @@
       el.value = state.items[i][el.dataset.k];
     });
   }
-  function openSheet(s) { state = s; state.items.forEach(snap); renderSheet(); dlg().showModal(); }
+  function openSheet(s) { state = s; state.items.forEach(snap); renderSheet(); showErr(''); dlg().showModal(); }
 
   let lastTyped = 0;
   $('#mealItems').addEventListener('input', (e) => {
@@ -142,16 +142,17 @@
     } else if (k === 'kcal') {                              // you set the calories for this amount: rebase
       const old = it.kcal, v = r0(num(el.value));
       if (old > 0) { const f = v / old; it.low = r0(it.low * f); it.high = r0(it.high * f); } else { it.low = v; it.high = v; }
-      it.kcal = v; rebase(it, ['kcal', 'low', 'high']);
+      it.kcal = v; it.kLock = el.value.trim() !== ''; rebase(it, ['kcal', 'low', 'high']);
     } else {                                                // a macro changed: calories move by the same energy
       const old = it[k], v = r0(num(el.value)), kc = k === 'fat' ? 9 : 4;
       it[k] = v;
+      if (it.kLock) { rebase(it, [k]); syncInputs(i, el); totals(); return; }   // you typed the calories yourself: they stay as typed
       const nk = Math.max(0, it.kcal + kc * (v - old));
       if (it.kcal > 0) { const f = nk / it.kcal; it.low = r0(it.low * f); it.high = r0(it.high * f); }
       it.kcal = r0(nk);
       rebase(it, [k, 'kcal', 'low', 'high']);
     }
-    syncInputs(i, el); totals();
+    syncInputs(i, el); totals(); state.warned = null; showErr('');
   });
   $('#mealItems').addEventListener('click', async (e) => {
     const rt = e.target.closest('[data-retry]');
@@ -191,10 +192,31 @@
     await DB.set('foodCache', cache);
   }
 
+  /* catch typos before they wreck a day's totals: hard limits block, a mismatch between the calories and the macros warns once */
+  const fmt = (n) => Math.round(n).toLocaleString();
+  function mealProblem(items) {
+    if (!items.length) return { msg: 'Add a food and its calories, or tap Cancel.' };
+    for (const it of items) {
+      const nm = it.name.trim() || 'This item';
+      if (!it.name.trim()) return { msg: 'Give each food a name.' };
+      if (!(it.kcal > 0) && !(it.protein > 0 || it.carbs > 0 || it.fat > 0)) return { msg: `${nm} has no calories. Enter the kcal or the macros.` };
+      const big = it.unit === 'g' || it.unit === 'ml' ? 5000 : 100;
+      if (it.amount > big) return { msg: `${nm}: ${fmt(it.amount)} ${UNIT_LABEL[it.unit] || 'servings'} looks wrong. Check the amount.` };
+      if (it.kcal > 6000) return { msg: `${nm}: ${fmt(it.kcal)} kcal looks wrong for one food. Check the numbers.` };
+      for (const [k, lab] of [['protein', 'protein'], ['carbs', 'carbs'], ['fat', 'fat']]) if (it[k] > 600) return { msg: `${nm}: ${fmt(it[k])} g ${lab} looks wrong. Check the numbers.` };
+    }
+    for (const it of items) {
+      const e = 4 * it.protein + 4 * it.carbs + 9 * it.fat;
+      if (it.kcal > 0 && e > it.kcal * 1.35 + 40) return { soft: true, msg: `${it.name.trim()}: the macros add up to about ${fmt(e)} kcal, but the calories say ${fmt(it.kcal)}. Tap Save again to keep it as is.` };
+    }
+    return null;
+  }
+  function showErr(m) { let el = $('#mealErr'); if (!el) { el = document.createElement('p'); el.id = 'mealErr'; el.className = 'err'; el.setAttribute('role', 'alert'); $('#mealTotal').after(el); } el.textContent = m || ''; el.hidden = !m; }
   $('#mealForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const items = state.items.filter((it) => it.name.trim() || it.kcal);
-    if (!items.length) { dlg().close(); return; }
+    const items = state.items.filter((it) => it.name.trim() || it.kcal || it.protein || it.carbs || it.fat);
+    const bad = mealProblem(items);
+    if (bad) { showErr(bad.msg); if (!bad.soft || state.warned !== bad.msg) { state.warned = bad.soft ? bad.msg : null; return; } }
     const t = totals();
     const data = {
       name: items.map((i) => i.name.trim() || 'Food').join(' + ').slice(0, 90),
@@ -390,6 +412,7 @@
       scale: 1, confidence: null, note: 'Enter the numbers yourself.', source: 'manual', cacheKey: norm(text) });
   });
 
+  window.Plate.openMeal = (st) => openSheet(st);
   window.Plate.editMeal = async function (id) {
     const meals = await DB.mealsOn(window.Plate.viewDay ? window.Plate.viewDay() : DB.dayKey());
     const m = meals.find((x) => x.id === id); if (!m) return;

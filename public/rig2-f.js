@@ -134,7 +134,7 @@
     },
   };
   S['smith-hip-thrust'] = Object.assign({}, S['hip-thrust'], {
-    pose: (p, e) => { const r = S['hip-thrust'].pose(p, e); r.props = r.props.concat([-1, 1].map((s) => P.cap('eq', [s * 74, 0, -20], 2.4, [s * 74, 150, -20], 2.4, 'back'))); return r; },
+    pose: (p, e) => { const r = S['hip-thrust'].pose(p, e); const g = r.props.find((q) => q.cls === 'gbar' && q.t === 'cap'), bar = g ? [0, (g.a[1] + g.b[1]) / 2, (g.a[2] + g.b[2]) / 2] : null; r.props = r.props.concat(R.X.smithFrame ? R.X.smithFrame(bar) : []); return r; },
   });
   S['cable-kickback'] = {
     phases: PH('Kick back', 'Return', { d: [1.2, 0.7, 1.9, 0.4], hold: 'Squeeze' }), cam: { S: 2.6, y0: 560, dx: 8 }, theta: -88, range: [-100, -20],

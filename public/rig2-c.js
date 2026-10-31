@@ -43,6 +43,21 @@
     const ar = a * D2R, T = [0, Sy, 1.5], Hh = sub(T, mul([0, Math.cos(ar), Math.sin(ar)], 50));
     return { H: Hh, a, T };
   };
+  /* an assisted pull-up machine: a tall frame with the weight stack at the back, steps to climb on, and the knee pad on a lever arm that
+     the stack pushes up, so it rises with you */
+  function assistFrame(ky) {
+    const o = [P.cap('gbar', [-52, 222, 2], 2.0, [52, 222, 2], 2.0, 'near'), P.box('eq', -46, 46, 0, 4, -52, 30, 'back'),
+      P.box('stk', -12, 12, 6, 60, -46, -39, 'back'), P.box('eq2', -12, 12, 60, 64, -46, -39, 'back'), P.cap('gbar', [-8, 6, -42.5], 0.8, [-8, 210, -42.5], 0.8, 'back'), P.cap('gbar', [8, 6, -42.5], 0.8, [8, 210, -42.5], 0.8, 'back'),
+      P.box('eq', -60, 60, 210, 216, -52, -44, 'back'), P.box('eq', -22, 22, ky - 6, ky, -6, 20, 'back'), P.slab('eq', [0, 26, -34], [0, ky - 6, 6], 3, 4, 'back'), P.disc('eq2', [0, 26, -34], 'x', 5, 8, 'back')];
+    [-1, 1].forEach((s) => {
+      o.push(P.box('eq', s * 60 - 4, s * 60 + 4, 4, 228, -2, 6, 'back'), P.box('eq', s * 60 - 4, s * 60 + 4, 4, 216, -52, -44, 'back'), P.box('eq', s * 60 - 4, s * 60 + 4, 216, 224, -52, 6, 'back'));
+      o.push(P.box('eq', s * 44 - 10, s * 44 + 10, 44, 48, -10, 8, 'back'), P.box('eq', s * 44 - 10, s * 44 + 10, 84, 88, -10, 8, 'back'));
+      o.push(P.cap('eq', [s * 28, 150, -6], 1.8, [s * 28, 150, 22], 1.8, 'back'), P.cap('eq', [s * 28, 150, -6], 1.8, [s * 56, 150, -6], 1.8, 'back'));
+    });
+    o.push(P.box('eq', -62, 62, 222, 228, -2, 6, 'back'));
+    o.forEach((q) => { if (q.layer === 'back') q.bg = true; });   // the frame stays behind the lifter, so it never hides the movement
+    return o;
+  }
   S['assisted-pull-up'] = {
     phases: PH('Pull', 'Lower', { d: [1.7, 0.4, 2.1, 0.4] }), cam: { S: 2.38, y0: 578 }, theta: -75, range: [-100, -20], shadow: { c: [0, 0, 0], rx: 60, rz: 44 },
     pose(p, e) {
@@ -51,7 +66,7 @@
         H: h.H, a, barHands: true, sh: [0, 0],
         arm: (s) => ({ W: [s * 36, 222, 2], pole: [s * 0.2, -0.6, lerp(-0.2, -0.9, p)] }),
         leg: (s, hip) => { const K = add(hip, mul(dirYZ(8), LEN.THIGH * 0.98)); return { K, A: add(K, mul(dirYZ(-96), LEN.SHIN)), pitch: -50 }; },
-        props: bars.concat([P.box('eq', -22, 22, ky - 6, ky, -4, 20, 'back'), P.box('eq', -5, 5, 0, ky - 6, 8, 16, 'back'), P.box('eq', -26, 26, 0, 3, -6, 30, 'back')]),
+        props: assistFrame(ky),
         hot: [['lats', H(1, e)], ['biceps', H(0.35, e)]],
       };
     },

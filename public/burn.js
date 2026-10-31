@@ -122,13 +122,24 @@
     return { kcal: Math.round(net(a[2], kg, m)), mins: m, label: a[1] };
   }
   async function log() { return (await DB.get('gymLog', [])) || []; }
+  /* steps: your goal already includes the walking of a normal day for your activity level, so only steps above that baseline count
+     (a brisk walk is about 3.5 MET at ~100 steps a minute: (3.5 - 1) x kg / 6000 per step) */
+  const STEP_BASE = { sedentary: 4000, light: 6500, moderate: 9000, very: 12000 };
+  async function stepsOn(date) { const v = await DB.get('steps:' + date, null); return v && v.steps > 0 ? v : null; }
+  async function stepsKcal(date, kg, prof) {
+    const v = await stepsOn(date); if (!v || !kg) return { steps: v ? v.steps : 0, kcal: 0, base: 0 };
+    const base = STEP_BASE[(prof && prof.activity) || 'light'] || 6500;
+    return { steps: v.steps, src: v.src, base, kcal: Math.round(Math.max(0, v.steps - base) * kg * 2.5 / 6000) };
+  }
   async function onDay(date) {
-    const l = (await log()).filter((x) => x.date === date);
-    return { kcal: l.reduce((a, x) => a + (x.kcal || 0), 0), entries: l, unknown: l.some((x) => x.kcal == null) };
+    const l = (await log()).filter((x) => x.date === date), kg = await weightKg(), st = await stepsKcal(date, kg, await DB.get('profile', null));
+    return { kcal: l.reduce((a, x) => a + (x.kcal || 0), 0) + st.kcal, entries: l, steps: st, unknown: l.some((x) => x.kcal == null) };
   }
   async function between(from, to) {
     const out = {}; (await log()).forEach((x) => { if (x.date >= from && x.date <= to) out[x.date] = (out[x.date] || 0) + (x.kcal || 0); });
+    const kg = await weightKg(), prof = await DB.get('profile', null), d = new Date(from + 'T12:00:00');
+    for (let i = 0; i < 400; i++) { const k = DB.dayKey(d); if (k > to) break; const st = await stepsKcal(k, kg, prof); if (st.kcal) out[k] = (out[k] || 0) + st.kcal; d.setDate(d.getDate() + 1); }
     return out;
   }
-  root.Burn = { FORMS, kindOf, session, EFFORT, ACTIVITIES, workout, activity, onDay, between, weightKg, CARDIO_MET };
+  root.Burn = { STEP_BASE, stepsOn, stepsKcal, FORMS, kindOf, session, EFFORT, ACTIVITIES, workout, activity, onDay, between, weightKg, CARDIO_MET };
 })(window);
