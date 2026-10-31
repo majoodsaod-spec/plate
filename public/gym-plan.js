@@ -258,7 +258,7 @@
           <p class="hint">Or ask the Coach tab for something custom, like "5 days, I want bigger shoulders".</p></details>
       </div>
       <div class="card" id="gpBurn">${burnCard()}</div>
-      <div class="card"><div class="sectionHead" style="padding:0"><h2>Last 7 days</h2><span class="hint">${st.log.filter((l) => !l.other && lastDays(7).includes(l.date)).length} workouts</span></div>
+      <div class="card"><div class="sectionHead" style="padding:0"><h2>Last 7 days</h2><span class="hint">${((n) => n + ' workout' + (n === 1 ? '' : 's'))(st.log.filter((l) => !l.other && lastDays(7).includes(l.date)).length)}</span></div>
         <div class="chips tiny">${ALL_MUSCLES.filter((m) => m !== 'cardio').map((m) => `<span class="mchip${tr.has(m) ? ' on' : ''}">${esc(GROUPS[m].name)}</span>`).join('')}</div>
         <p class="hint">Highlighted muscles were trained in a workout you logged. Log workouts with "Log workout".</p></div>
       <div class="card" id="gpProg">${window.GymProgress ? GymProgress.card(st.log, GymLog.MAP) : ''}</div>`;
