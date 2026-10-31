@@ -17,7 +17,28 @@
     requestAnimationFrame(() => toastEl.classList.add('on'));
     toastT = setTimeout(() => toastEl.classList.remove('on'), ms || 7000);
   }
-  window.Plate = { $, $$, esc, hooks, toast, refreshToday: () => renderToday(), refreshAll: () => { renderToday(); const t = TABS.find((x) => !$('#view-' + x).hidden); if (t && hooks[t]) hooks[t](); } };
+  /* the AI sometimes answers in markdown: show **bold**, *italic*, bullet and numbered lists and [1] / [1, 3] citations properly instead of raw stars */
+  function md(text, o) {
+    o = o || {};
+    const inline = (t) => {
+      t = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/__(.+?)__/g, '<b>$1</b>')
+        .replace(/(^|[\s(])\*(?!\s)([^*\n]+?)\*(?=[\s.,;:!?)]|$)/g, '$1<i>$2</i>').replace(/(^|[\s(])_(?!\s)([^_\n]+?)_(?=[\s.,;:!?)]|$)/g, '$1<i>$2</i>')
+        .replace(/^#{1,4}\s+(.+)$/, '<b>$1</b>');
+      if (o.cite) t = t.replace(/\s?\[(\d+(?:\s*,\s*\d+)*)\]/g, (m, d) => `<sup class="cite">${d.split(/\s*,\s*/).join(',')}</sup>`);
+      return t;
+    };
+    const out = []; let list = null;
+    const close = () => { if (list) { out.push(`<${list.t} class="mdl">${list.items.map((x) => `<li>${x}</li>`).join('')}</${list.t}>`); list = null; } };
+    String(text || '').replace(/\r/g, '').split('\n').forEach((line) => {
+      const b = /^\s*(?:[*\-•]|\d+[.)])\s+(.*)$/.exec(line);
+      if (b) { const t = /^\s*\d/.test(line) ? 'ol' : 'ul'; if (!list || list.t !== t) { close(); list = { t, items: [] }; } list.items.push(inline(b[1])); return; }
+      close();
+      if (line.trim()) out.push(`<p>${inline(line.trim())}</p>`);
+    });
+    close();
+    return `<div class="md">${out.join('')}</div>`;
+  }
+  window.Plate = { $, $$, esc, md, hooks, toast, refreshToday: () => renderToday(), refreshAll: () => { renderToday(); const t = TABS.find((x) => !$('#view-' + x).hidden); if (t && hooks[t]) hooks[t](); } };
 
   /* ---------- tabs ---------- */
   function showTab(name, remember) {

@@ -844,3 +844,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .composer { transition: box-shadow .2s ease, border-color .2s ease; }
 .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); box-shadow: 0 6px 24px rgba(0,0,0,.16); }
 @media (prefers-reduced-motion: reduce) { .fxSend, .fxIn, .fxw, .msg.wait .tdots i, .msg.wait .tlabel { animation: none !important; } .msg.wait .tlabel { color: var(--muted); background: none; } }
+.md { white-space: normal; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; }
+.md p { margin: 0; }
+.md .mdl { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.md .mdl li::marker { color: var(--muted); }
+.md b { font-weight: 650; }

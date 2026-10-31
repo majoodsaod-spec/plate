@@ -262,7 +262,7 @@
   let regionName = '';
   const qchips = () => ['Log 2 eggs and toast for breakfast', 'I weigh 79.5 kg today', 'Am I eating enough protein for my goal?', regionName ? 'How can I get more iron from food in ' + regionName + '?' : 'How can I get more iron from food?', 'What should I eat before and after a workout?', 'Do I need a vitamin D supplement?'];
   function linkify(text) {
-    return esc(text).replace(/\[(\d+)\]/g, (m, d) => `<sup class="cite">${d}</sup>`).replace(/\n/g, '<br>');
+    return window.Plate.md(text, { cite: true });
   }
   const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
   function renderQA() {
@@ -270,7 +270,7 @@
       if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>`;
       if (m.wait) return '<div class="msg ai wait">Checking trusted sources…</div>';
       if (m.err) return `<div class="msg ai err">${esc(m.text)}</div>`;
-      if (m.plain) return `<div class="msg ai ans"><div>${esc(m.text)}</div>${m.act ? Actions.html(m.act, i, esc) : ''}</div>`;
+      if (m.plain) return `<div class="msg ai ans">${window.Plate.md(m.text)}${m.act ? Actions.html(m.act, i, esc) : ''}</div>`;
       const cov = { sourced: ['From trusted sources', 'ok'], partial: ['Partly sourced', 'mid'], data: ['From your food log', 'ok'], general: ['General advice, no source found', 'low'] }[m.coverage] || ['', ''];
       return `<div class="msg ai ans"><div>${linkify(m.text)}</div>
         <span class="chip cov ${cov[1]}">${cov[0]}</span>

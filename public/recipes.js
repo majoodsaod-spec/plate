@@ -239,7 +239,7 @@
     $('#chat').innerHTML = chat.msgs.map((m, i) => {
       if (m.role === 'me') return `<div class="msg me">${esc(m.text)}${chat.busy ? '' : `<button type="button" class="editMsg" data-edit="${i}">Edit</button>`}</div>`;
       if (m.wait) return '<div class="msg ai wait">Cooking something up…</div>';
-      const body = m.text ? `<div class="msg ai${m.err ? ' err' : ''}">${esc(m.text)}</div>` : '';
+      const body = m.text ? (m.err ? `<div class="msg ai err">${esc(m.text)}</div>` : `<div class="msg ai ans">${window.Plate.md(m.text)}</div>`) : '';
       if (!m.recipe) return body;
       return body + recipeHTML(m.recipe, `<div class="actions">
         <button type="button" class="primary" data-act="save" data-i="${i}" ${m.savedId ? 'disabled' : ''}>${m.savedId ? 'Saved ✓' : 'Save recipe'}</button>
