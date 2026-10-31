@@ -261,6 +261,19 @@
   const qa = { msgs: [], busy: false };
   let regionName = '';
   const qchips = () => ['Log 2 eggs and toast for breakfast', 'I weigh 79.5 kg today', 'Am I eating enough protein for my goal?', regionName ? 'How can I get more iron from food in ' + regionName + '?' : 'How can I get more iron from food?', 'What should I eat before and after a workout?', 'Do I need a vitamin D supplement?'];
+  /* suggestion chips are sent as your own message, so they must read as yours: "Would you like ideas for X?" becomes "Ideas for X";
+     a question aimed at you ("How many servings would you like?") is dropped */
+  function voice(f) {
+    let t = String(f || '').trim(); if (!t) return '';
+    const m = /^(?:would you like|do you want|want|shall i|should i|can i)\s+(?:me\s+)?(?:to\s+)?(.+?)\??$/i.exec(t);
+    if (m) {
+      t = m[1].replace(/^(give|show|share|suggest|list|find|make|build|create|plan)\s+you\b/i, '$1 me').replace(/\byour\b/gi, 'my').replace(/\byou\b/gi, 'me');
+      if (/^(some|more|a|an|the)\b|ideas?|tips|list|plan|options|recipes?|examples?/i.test(t) && !/^(give|show|share|suggest|list|find|make|build|create|plan)\b/i.test(t)) t = 'Give me ' + t;
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    }
+    if (/\b(would|do|did|are|have|will) you\b|\byou'd\b/i.test(t)) return '';
+    return t;
+  }
   function linkify(text) {
     return window.Plate.md(text, { cite: true });
   }
@@ -344,7 +357,7 @@ Return ONLY this JSON: {"reply":"one or two plain sentences","actions":[],"answe
       }
       const r = await AI.answer({ question: text, context: await askContext(), region, history: hist, prevQuestion: prevQ ? prevQ.text : '' });
       qa.msgs.pop();
-      qa.msgs.push({ role: 'ai', text: r.answer, coverage: r.coverage, sources: r.sources, searchNote: r.searchNote, follow: r.follow_ups });
+      qa.msgs.push({ role: 'ai', text: r.answer, coverage: r.coverage, sources: r.sources, searchNote: r.searchNote, follow: (r.follow_ups || []).map(voice).filter(Boolean) });
     } catch (e) { qa.msgs.pop(); qa.msgs.push({ role: 'ai', text: e.message, err: true }); }
     qa.busy = false; $('#nSend').disabled = false; renderQA();
   }
