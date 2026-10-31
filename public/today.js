@@ -233,6 +233,7 @@
       $('#mealText').value = ''; clearPhoto(); $('#mealClear').hidden = true;
     }
     await rememberItems(items); await saveLabels(items);
+    if (window.Plate.afterSave) { try { window.Plate.afterSave(state, items); } catch (x) {} }
     dlg().close();
     window.Plate.refreshToday();
   });

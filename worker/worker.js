@@ -38,7 +38,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (!env.DB) return fail('The database is not connected to this Worker yet (binding DB).', 500);
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
-    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups') || path.startsWith('/push/') || path.startsWith('/hook/')) {
+    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups') || path.startsWith('/push/') || path.startsWith('/hook/') || path.startsWith('/barcode')) {
       try { return await accounts(req, env, path, reply, fail); } catch (e) { return fail('Server error: ' + e.message, 500); }
     }
     if (req.method !== 'POST') return fail('POST only', 405);
@@ -617,6 +617,8 @@ async function accounts(req, env, path, reply, fail) {
   const user = await authed(req, env);
   if (!user) return fail('unauthorized', 401);
 
+  if (path === '/barcode' || path.startsWith('/barcode/')) { await migrate(env); return barcodeRoute(env, user, path, url, body, reply, fail, req.method); }
+
   if (path.startsWith('/push/') || path.startsWith('/hook/')) {
     await migrate(env);
     if (path === '/hook/new' && req.method === 'POST') {
@@ -734,6 +736,7 @@ async function migrate(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS push_user ON push_subs (user_id)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS hooks (key_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, tz INTEGER NOT NULL DEFAULT 180, created INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS barcodes (code TEXT PRIMARY KEY, data TEXT NOT NULL, src TEXT NOT NULL, region TEXT NOT NULL DEFAULT \'\', by_user TEXT, updated INTEGER NOT NULL)'),
   ]);
   migrated = true;
 }
@@ -845,4 +848,126 @@ async function reminderFor(env, uid, sl, p, c) {
     return { title: 'Add your steps', body: 'Type today\'s steps on the Today tab.', tag: 'steps', tab: 'today' };
   }
   return null;
+}
+
+
+/* ===================== barcodes ===================== */
+/* One lookup, several sources, best first:
+   1. Plate's own shared table: every product anyone using this server has found or photographed before (instant, and it grows with use;
+      it is the local database for your country, built from what people here actually buy)
+   2. Open Food Facts (free, ~3 million products worldwide, includes thousands from Qatar, Saudi Arabia and the UAE)
+   3. USDA FoodData Central branded foods (free, ~450,000 mostly American products, many sold in Gulf supermarkets)
+   4. The product's name from the barcode (Open Food Facts or UPCitemdb), then the web search for its label figures
+   5. Nothing found: the app asks for a photo of the nutrition label, reads it, and saves it here so the next scan is instant
+   Every product is stored as { name, brand, unit: 'g'|'ml', per100: {kcal, protein, carbs, fat} | null, perServing: {...} | null, serving, servingText, pack } */
+const num0 = (v) => { const n = Number(v); return isFinite(n) && n >= 0 ? n : 0; };
+const r1 = (n) => Math.round(n * 10) / 10;
+const codeVariants = (c) => { const s = new Set([c]); if (c.length === 13 && c[0] === '0') s.add(c.slice(1)); if (c.length === 12) s.add('0' + c); if (c.length === 14 && c[0] === '0') s.add(c.slice(1)); return [...s]; };
+const okProduct = (p) => p && ((p.per100 && p.per100.kcal >= 0 && (p.per100.kcal > 0 || p.per100.protein + p.per100.carbs + p.per100.fat > 0)) || (p.perServing && p.perServing.kcal > 0));
+const sane = (q) => q && q.kcal <= 950 && q.protein <= 100 && q.carbs <= 100 && q.fat <= 100;
+
+async function offProduct(code) {
+  const f = 'product_name,product_name_en,product_name_ar,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit,quantity,product_quantity,product_quantity_unit,countries_tags';
+  for (const c of codeVariants(code)) {
+    let j = null;
+    try { const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=${f}`, { headers: { 'user-agent': 'Plate/1.0 (personal food tracker)' }, signal: AbortSignal.timeout(8000) }); if (r.ok) j = await r.json(); } catch (e) {}
+    if (!j || !j.product) continue;
+    const p = j.product, n = p.nutriments || {}, name = (p.product_name || p.product_name_en || p.product_name_ar || '').trim(), brand = String(p.brands || '').split(',')[0].trim();
+    const kcal = n['energy-kcal_100g'] != null ? num0(n['energy-kcal_100g']) : n['energy_100g'] != null ? num0(n['energy_100g']) / 4.184 : null;
+    const unitStr = String(p.product_quantity_unit || p.serving_quantity_unit || p.quantity || '');
+    const unit = /\bm?l\b|ml|cl/i.test(unitStr) && !/\bk?g\b/i.test(unitStr) ? 'ml' : 'g';
+    const out = { name, brand, unit, per100: kcal == null ? null : { kcal: Math.round(kcal), protein: r1(num0(n.proteins_100g)), carbs: r1(num0(n.carbohydrates_100g)), fat: r1(num0(n.fat_100g)) },
+      perServing: null, serving: num0(p.serving_quantity) || null, servingText: String(p.serving_size || '').slice(0, 40), pack: num0(p.product_quantity) || null, src: 'Open Food Facts' };
+    if (!out.per100 && n['energy-kcal_serving'] != null) out.perServing = { kcal: Math.round(num0(n['energy-kcal_serving'])), protein: r1(num0(n.proteins_serving)), carbs: r1(num0(n.carbohydrates_serving)), fat: r1(num0(n.fat_serving)) };
+    return out;
+  }
+  return null;
+}
+async function fdcProduct(env, code) {
+  const key = env.FDC_API_KEY || 'DEMO_KEY';
+  let j = null;
+  try { const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(key)}&dataType=Branded&pageSize=5&query=${code}`, { signal: AbortSignal.timeout(8000) }); if (r.ok) j = await r.json(); } catch (e) {}
+  const want = new Set(codeVariants(code).map((c) => c.replace(/^0+/, '')));
+  const f = j && (j.foods || []).find((x) => want.has(String(x.gtinUpc || '').replace(/^0+/, '')));
+  if (!f) return null;
+  const nv = (id, name) => { const q = (f.foodNutrients || []).find((x) => x.nutrientId === id || x.nutrientNumber === String(id) || (name && x.nutrientName === name)); return q ? num0(q.value) : 0; };
+  let kcal = nv(1008, 'Energy'); if (!kcal) kcal = nv(2047) || nv(2048);
+  const unit = /ml/i.test(String(f.servingSizeUnit || '')) ? 'ml' : 'g';
+  return { name: String(f.description || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()), brand: String(f.brandName || f.brandOwner || ''), unit,
+    per100: { kcal: Math.round(kcal), protein: r1(nv(1003, 'Protein')), carbs: r1(nv(1005, 'Carbohydrate, by difference')), fat: r1(nv(1004, 'Total lipid (fat)')) },
+    perServing: null, serving: num0(f.servingSize) || null, servingText: f.householdServingFullText ? String(f.householdServingFullText).slice(0, 40) : '', pack: null, src: 'USDA FoodData Central' };
+}
+async function upcName(code) {
+  try { const r = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8000) }); if (!r.ok) return null; const j = await r.json(); const it = (j.items || [])[0]; return it ? { name: String(it.title || '').slice(0, 90), brand: String(it.brand || '').slice(0, 60) } : null; } catch (e) { return null; }
+}
+/* the web search reader returns figures per 100 g, per serving or per piece: turn them into the product format */
+function fromWeb(name, brand, p) {
+  const v = { kcal: Math.round(num0(p.kcal)), protein: r1(num0(p.protein)), carbs: r1(num0(p.carbs)), fat: r1(num0(p.fat)) };
+  const out = { name, brand, unit: p.per === '100ml' ? 'ml' : 'g', per100: null, perServing: null, serving: num0(p.serving_g) || null, servingText: '', pack: null, src: 'web: ' + clip(p.source, 120) };
+  if (p.per === '100g' || p.per === '100ml') out.per100 = v;
+  else if (out.serving) out.per100 = { kcal: Math.round(v.kcal * 100 / out.serving), protein: r1(v.protein * 100 / out.serving), carbs: r1(v.carbs * 100 / out.serving), fat: r1(v.fat * 100 / out.serving) };
+  else { out.perServing = v; out.servingText = p.per === 'piece' ? '1 piece' : '1 serving'; }
+  return out;
+}
+async function useAi(env, user) {
+  const cap = Number(env.AI_DAILY_LIMIT) || 150, today = new Date().toISOString().slice(0, 10), u = await env.DB.prepare('SELECT ai_day, ai_count FROM users WHERE id = ?').bind(user.id).first();
+  const used = u && u.ai_day === today ? u.ai_count : 0; if (used >= cap) return false;
+  await env.DB.prepare('UPDATE users SET ai_day = ?, ai_count = ? WHERE id = ?').bind(today, used + 1, user.id).run(); return true;
+}
+const LABEL_SYSTEM = `You read a photo of a food package's nutrition label. Use ONLY numbers printed on the label; never guess. Labels may be in Arabic and English: use either.
+Return ONLY JSON: {"found":true,"name":"product name if visible, else empty","brand":"brand if visible, else empty","unit":"g or ml","per100":{"kcal":0,"protein":0,"carbs":0,"fat":0} or null,"perServing":{"kcal":0,"protein":0,"carbs":0,"fat":0} or null,"serving":serving size in g or ml as a number or null,"servingText":"as printed, short","pack":net contents in g or ml or null}
+Fill per100 when the label has a per 100 g / 100 ml column; fill perServing when it has a per serving column (both if both). Energy in kcal (convert kJ by dividing by 4.184 only if kcal is not printed). Carbohydrates = total carbohydrate. If the photo does not show a readable nutrition table return {"found":false}.`;
+async function barcodeRoute(env, user, path, url, body, reply, fail, method) {
+  const raw = String(url.searchParams.get('code') || body.code || '').replace(/\D/g, '');
+  if (raw.length < 6 || raw.length > 14) return fail('That is not a barcode number.', 400);
+  const code = raw.replace(/^0+(?=\d{8})/, '');            // one key for the same product however its zeros were scanned (UPC-A vs EAN-13)
+  const region = clip(url.searchParams.get('region') || body.region || '', 40);
+  const save = async (p, src) => { await env.DB.prepare('INSERT INTO barcodes (code, data, src, region, by_user, updated) VALUES (?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET data = excluded.data, src = excluded.src, region = excluded.region, by_user = excluded.by_user, updated = excluded.updated').bind(code, JSON.stringify(p), src, region, user.id, Date.now()).run(); };
+
+  if (path === '/barcode') {
+    const hit = await env.DB.prepare('SELECT data, src FROM barcodes WHERE code = ?').bind(code).first();
+    if (hit) { const p = JSON.parse(hit.data); return reply({ found: true, product: Object.assign(p, { shared: true }) }); }
+    let name = null;
+    const off = await offProduct(raw.length === 12 ? '0' + raw : raw);
+    if (okProduct(off) && sane(off.per100 || { kcal: 0, protein: 0, carbs: 0, fat: 0 })) { await save(off, 'off'); return reply({ found: true, product: off }); }
+    if (off && off.name) name = { name: off.name, brand: off.brand };
+    const fdc = await fdcProduct(env, raw);
+    if (okProduct(fdc) && sane(fdc.per100)) { await save(fdc, 'fdc'); return reply({ found: true, product: fdc }); }
+    if (!name && fdc && fdc.name) name = { name: fdc.name, brand: fdc.brand };
+    if (!name) name = await upcName(raw);
+    if (name && name.name && env.TAVILY_API_KEY && url.searchParams.get('web') !== '0' && await useAi(env, user)) {
+      const b = { brand: name.brand, name: name.name, region, amount: 1, unit: 'serving' };
+      const plan = [[`${name.brand} ${name.name} nutrition facts per 100g calories protein carbs fat`, 'basic', 8], [`${name.brand} ${name.name} ${code} nutrition label`, 'advanced', 8]];
+      for (const [q, depth, n] of plan) {
+        let list; try { list = await tavilySearch(env, q.replace(/\s+/g, ' ').trim(), depth, n); } catch (e) { break; }
+        const res = rankResults(list.filter((r) => r && r.url), name.brand).slice(0, 8).map((r) => ({ url: clip(r.url, 200), title: clip(r.title, 120), content: clip(r.content, 1200) }));
+        if (!res.length) continue;
+        let p = null; try { p = await readResults(env, b, name.brand, name.name, region, res); } catch (e) {}
+        if (p) { const prod = fromWeb(name.name, name.brand, p); if (okProduct(prod) && (!prod.per100 || sane(prod.per100))) { await save(prod, 'web'); return reply({ found: true, product: prod, approx: true }); } }
+      }
+    }
+    return reply({ found: false, name: name || null });
+  }
+  if (path === '/barcode/label' && method === 'POST') {
+    const img = String(body.image || ''); if (img.length < 1000 || img.length > 2_400_000) return fail('Send one photo of the nutrition label.', 400);
+    if (!(await useAi(env, user))) return fail('Daily limit reached. It resets at midnight UTC.', 429);
+    const job = { system: LABEL_SYSTEM, history: [], images: [img], json: true, search: false, searched: false, searchError: '', max: 500, text: `Barcode ${code}.${body.name ? ' The product may be: ' + clip(body.name, 90) + '.' : ''} Read the nutrition label.` };
+    let p; try { p = JSON.parse(await gemini(env, job, 'check')); } catch (e) { return fail('Could not read the label. Try a sharper, closer photo.', 422); }
+    if (!p || !p.found) return reply({ found: false });
+    const fix = (q) => (q ? { kcal: Math.round(num0(q.kcal)), protein: r1(num0(q.protein)), carbs: r1(num0(q.carbs)), fat: r1(num0(q.fat)) } : null);
+    const prod = { name: clip(p.name || (body.name || ''), 90) || 'Packaged food', brand: clip(p.brand || body.brand || '', 60), unit: p.unit === 'ml' ? 'ml' : 'g', per100: fix(p.per100), perServing: fix(p.perServing),
+      serving: num0(p.serving) || null, servingText: clip(p.servingText, 40), pack: num0(p.pack) || null, src: 'label photo' };
+    if (prod.per100 && !(prod.per100.kcal > 0)) prod.per100 = null;
+    if (prod.perServing && !(prod.perServing.kcal > 0)) prod.perServing = null;
+    if (!okProduct(prod) || (prod.per100 && !sane(prod.per100))) return reply({ found: false });
+    await save(prod, 'label');
+    return reply({ found: true, product: prod });
+  }
+  if (path === '/barcode/fix' && method === 'POST') {        // the user corrected the numbers: the shared copy learns the fix
+    const p = body.product || {}, fix = (q) => (q ? { kcal: Math.round(num0(q.kcal)), protein: r1(num0(q.protein)), carbs: r1(num0(q.carbs)), fat: r1(num0(q.fat)) } : null);
+    const prod = { name: clip(p.name, 90), brand: clip(p.brand, 60), unit: p.unit === 'ml' ? 'ml' : 'g', per100: fix(p.per100), perServing: fix(p.perServing), serving: num0(p.serving) || null, servingText: clip(p.servingText, 40), pack: num0(p.pack) || null, src: 'edited' };
+    if (!okProduct(prod) || (prod.per100 && !sane(prod.per100))) return fail('Those numbers do not look right.', 400);
+    await save(prod, 'user'); return reply({ ok: true });
+  }
+  return fail('Not found', 404);
 }

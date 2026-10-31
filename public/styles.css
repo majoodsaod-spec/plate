@@ -820,3 +820,6 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .log .row:has(#scanBtn) .photoBtn { padding: 0 12px; }
 .log select#refObj { flex: 1 1 110px; min-width: 0; max-width: 100%; }
 .log #fileName:empty { display: none; }
+.photoBtn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+#scanLabel { margin: 4px 0 10px; }
+.scanSheet.noCam .scanView { display: none; }
