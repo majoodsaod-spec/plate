@@ -40,6 +40,7 @@
     if (!prev || reduce()) return;                       // first time this chat is drawn: show it as it is
     items.forEach((el, i) => {
       if (i < prev.length && prev[i] === sigs[i]) return;
+      if (!items.slice(0, i).some((x) => x.classList.contains('me')) && !el.classList.contains('me')) return;   // the opening greeting just appears, no animation
       if (el.classList.contains('me')) el.classList.add('fxSend');
       else if (el.classList.contains('wait')) el.classList.add('fxIn');
       else { el.classList.add('fxIn'); if (el.classList.contains('msg') && !el.classList.contains('err')) words(el); }
