@@ -849,3 +849,5 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .md .mdl { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .md .mdl li::marker { color: var(--muted); }
 .md b { font-weight: 650; }
+/* lifted out of the way for an instant while the keyboard opens (see composer.js) */
+.composer.prefocus { position: fixed !important; top: calc(env(safe-area-inset-top) + 64px) !important; bottom: auto !important; left: 16px !important; right: 16px !important; opacity: 0 !important; transition: none !important; pointer-events: none; }

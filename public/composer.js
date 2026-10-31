@@ -89,6 +89,21 @@
   document.addEventListener('click', () => setTimeout(sanity, 50), true);
   window.addEventListener('resize', place); window.addEventListener('orientationchange', () => setTimeout(place, 250));
   document.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('.composer textarea')) { grow(e.target); reserve(); } });
+  /* iOS slides the whole page up to show a text box that the keyboard is about to cover, and our fix slides it back: that is the
+     flicker on tap. If the box is near the top of the screen at the moment it gets focus, iOS has nothing to reveal and does not slide.
+     So on tap: lift the box (invisibly) to the top, focus it, and let it reappear just above the keyboard once the keyboard is up. */
+  let lift = 0;
+  const drop = (f) => { clearTimeout(lift); if (f) f.classList.remove('prefocus'); };
+  document.addEventListener('touchend', (e) => {
+    const ta = e.target && e.target.closest && e.target.closest('#gcIn, #nInput, #chatInput');
+    if (!ta || document.activeElement === ta || !vv) return;
+    const f = ta.closest('form'); if (!f || !f.matches(FLOAT)) return;
+    e.preventDefault();
+    f.classList.add('prefocus'); ta.focus({ preventScroll: true });
+    try { const n = ta.value.length; ta.setSelectionRange(n, n); } catch (x) {}
+    const t0 = Date.now(), wait = () => { if (kbOpen || Date.now() - t0 > 700) { place(); drop(f); } else lift = setTimeout(wait, 30); };
+    lift = setTimeout(wait, 60);
+  }, { passive: false });
   /* when the keyboard comes up, keep the latest messages in view above the box */
   document.addEventListener('focusin', (e) => {
     if (isField(e.target)) { typing = true; if (isChatField(e.target)) lock(); burst(1200); }

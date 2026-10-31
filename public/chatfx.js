@@ -6,7 +6,7 @@
   'use strict';
   const reduce = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const seen = {};                          // chat id -> signatures of the messages already shown
-  const sigOf = (el) => el.className + '|' + (el.textContent || '').length + '|' + (el.textContent || '').slice(0, 24);
+  const sigOf = (el) => el.className.replace(/\s*\bfx\w+/g, '').trim() + '|' + (el.textContent || '').length + '|' + (el.textContent || '').slice(0, 24);
 
   function dots(el) {
     if (el.querySelector('.tdots')) return;
