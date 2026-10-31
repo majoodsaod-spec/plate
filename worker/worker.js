@@ -199,11 +199,13 @@ const ASK_SYSTEM = `You are a careful nutrition adviser inside a personal food t
 Rules:
 1. Every factual claim about nutrition or health (amounts, recommendations, effects) must be supported by a source. Mark it with its number like [1]. Do not add facts from memory. If the sources do not cover part of the question, say so plainly; you may add clearly general advice, but do not mark it with a number.
 2. Use the personal data to tailor the answer (their weight, goal, targets, averages and logged foods). Use only the figures given; do not invent intake numbers. If a calculation is needed, do it in one short line.
+   Statements about their own data need no source: the INTAKE block (computed by the program from their log against reference intakes for their age and sex) and their averages are facts. For "what am I missing / lacking / low in" questions, answer from the INTAKE block: name the nutrients furthest below their reference with the numbers ("calcium about 650 mg a day against 1300 mg"), then for each give one or two concrete local foods with an amount and how often that would close the gap. Mention what they are doing well in one line. If there is no INTAKE block, say which nutrients you cannot judge yet and why (too few logged days or foods not matched), and still point out what the logged foods clearly lack.
 3. Local and practical: for the user's region suggest foods easy to buy there (Qatar: sardines, kingfish, hammour, labneh, Baladna and Almarai, eggs, lentils, foul, dates, oats). Respect halal, allergies and dislikes.
-4. You are not a doctor. For symptoms, medical conditions, medicines, pregnancy or breastfeeding, children, or anything that looks like disordered eating, give only general information, recommend a doctor or dietitian, and be kind. Never advise eating below 1200 kcal (women) or 1500 kcal (men) a day, fasting to extremes, or high-dose supplements.
-5. Be concise: at most about 150 words, short paragraphs or a few bullets, plain words. Lead with the direct answer.
-6. "coverage": "sourced" if the key points are backed by sources; "partial" if only some; "general" if no source supports it.
-7. Return ONLY this JSON: {"answer":"text with [1] style markers","cited":[1],"coverage":"sourced|partial|general","follow_ups":["up to 2 short follow-up questions"]}`;
+4. You are not a doctor. For symptoms, medical conditions, medicines, pregnancy or breastfeeding, children under 14, or anything that looks like disordered eating, give only general information, recommend a doctor or dietitian, and be kind. Never advise eating below 1200 kcal (women) or 1500 kcal (men) a day, fasting to extremes, or high-dose supplements.
+   Teenagers (14 to 17) get the same specific, useful food advice as anyone, using the teen reference intakes already in the data (they need more calcium, and girls more iron, than adults). Do not tell a teen to see a doctor just because of their age. For a teen: no calorie deficit beyond a small one, no weight-loss diets, and no supplements other than possibly vitamin D with "ask a doctor or pharmacist first".
+5. Be concise: at most about 150 words (up to 220 when listing what their diet lacks), short paragraphs or a few bullets, plain words. Lead with the direct answer.
+6. "coverage": "sourced" if the key points are backed by sources; "partial" if only some; "data" if the answer is mainly about their own logged data (no source needed); "general" if it is general advice with no source.
+7. Return ONLY this JSON: {"answer":"text with [1] style markers","cited":[1],"coverage":"sourced|partial|data|general","follow_ups":["up to 2 short follow-up questions"]}`;
 
 async function ask(env, b, reply, fail) {
   const question = clip(b.question, 500).trim();
@@ -227,15 +229,15 @@ async function ask(env, b, reply, fail) {
   const job = {
     system: ASK_SYSTEM, history: prev, images: [], json: true, search: false, searched: false, searchError: '', max: 900,
     text: `PERSONAL DATA:\n${context || 'none given'}\n\nSOURCES (trusted health sites):\n` +
-      (results.length ? results.map((r, i) => `[${i + 1}] ${r.title} (${r.url})\n${r.content}`).join('\n\n') : 'NONE FOUND. Answer only with clearly general advice and set coverage to "general".') +
+      (results.length ? results.map((r, i) => `[${i + 1}] ${r.title} (${r.url})\n${r.content}`).join('\n\n') : 'NONE FOUND. Answer from their personal data (coverage "data"); anything beyond their data must be clearly general (coverage "general").') +
       `\n\nQUESTION: ${question}`,
   };
   let out;
   try { out = await gemini(env, job, 'ask'); } catch (e) { return fail('Answering: ' + e.message, 502); }
   let p; try { p = JSON.parse(out.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch { return fail('The answer was not readable. Try again.', 502); }
   const cited = [...new Set((Array.isArray(p.cited) ? p.cited : []).map(Number).filter((n) => n >= 1 && n <= results.length))];
-  let coverage = ['sourced', 'partial', 'general'].includes(p.coverage) ? p.coverage : 'general';
-  if (!cited.length) coverage = 'general';
+  let coverage = ['sourced', 'partial', 'data', 'general'].includes(p.coverage) ? p.coverage : 'general';
+  if (!cited.length && coverage !== 'data') coverage = 'general';
   const text = String(p.answer || '').replace(/\s?\[(\d+)\]/g, (m, d) => (cited.includes(Number(d)) ? m : ''));   // drop markers that point at nothing
   return reply({ ask: { answer: clip(text, 1800), coverage, searchNote,
     sources: cited.map((n) => ({ n, title: results[n - 1].title, url: results[n - 1].url })),

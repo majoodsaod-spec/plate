@@ -64,9 +64,14 @@
     ['fiber', 'Fibre', 'g', 0], ['vitA', 'Vitamin A', 'µg', 0], ['vitC', 'Vitamin C', 'mg', 0], ['vitD', 'Vitamin D', 'µg', 1], ['vitE', 'Vitamin E', 'mg', 1],
     ['vitK', 'Vitamin K', 'µg', 0], ['b12', 'Vitamin B12', 'µg', 1], ['folate', 'Folate', 'µg', 0], ['sodium', 'Sodium', 'mg', 0], ['satfat', 'Saturated fat', 'g', 0],
   ];
-  /* adult reference intakes: US NASEM/NIH RDA or AI values; sodium limit from WHO (2 g); saturated fat under 10% of calories (WHO) */
+  /* reference intakes: US NASEM/NIH RDA or AI values (teen values for 14-18, which need more calcium, magnesium and, for girls, iron than adults);
+     sodium limit from WHO (2 g); saturated fat under 10% of calories (WHO) */
   function refFor(p, kcal) {
     const m = p.sex === 'male', a = p.age;
+    if (a < 19) return {
+      iron: m ? 11 : 15, calcium: 1300, magnesium: m ? 410 : 360, zinc: m ? 11 : 9, potassium: m ? 3000 : 2300, fiber: m ? 38 : 26, vitA: m ? 900 : 700, vitC: m ? 75 : 65,
+      vitD: 15, vitE: 15, vitK: 75, b12: 2.4, folate: 400, sodium: 2000, satfat: Math.round(0.1 * kcal / 9),
+    };
     return {
       iron: m ? 8 : a > 50 ? 8 : 18, calcium: m ? (a > 70 ? 1200 : 1000) : (a > 50 ? 1200 : 1000), magnesium: m ? (a > 30 ? 420 : 400) : (a > 30 ? 320 : 310),
       zinc: m ? 11 : 8, potassium: m ? 3400 : 2600, fiber: m ? (a > 50 ? 30 : 38) : (a > 50 ? 21 : 25), vitA: m ? 900 : 700, vitC: m ? 90 : 75,
@@ -92,7 +97,7 @@
 
   /* average daily intake per nutrient from the matched foods. Returns null if the profile is missing or too young for the adult table. */
   async function intake(c) {
-    if (!c.prof || !(c.prof.age >= 19) || c.counted < 3) return null;
+    if (!c.prof || !(c.prof.age >= 14) || c.counted < 3) return null;
     const map = await getMap();
     const totKcal = c.entries.reduce((a, e) => a + e.kcal, 0) || 1;
     const sum = {}, covK = {}; NK.forEach(([k]) => { sum[k] = 0; covK[k] = 0; });
@@ -131,7 +136,7 @@
       body = rows.map((r) => `<div class="nrow"><div class="ntop"><span>${r.label}</span><b>${fmt(r.avg, r.dec)} / ${r.max ? '≤ ' : ''}${fmt(r.ref, r.dec)} ${r.unit}</b></div>
         <div class="nbar" role="img" aria-label="${r0(r.pct * 100)}% of reference"><i class="${r.status}" style="width:${Math.min(100, r.pct * 100)}%"></i></div></div>`).join('') +
         (unk.length ? `<p class="hint" style="margin:8px 0 0"><b>Can't tell from your foods:</b> ${esc(unk.join(', '))}. The database has no values for these in the foods you eat (common for vitamin D and B12), so they aren't counted as gaps. A blood test is the way to check.</p>` : '') +
-        `<p class="hint" style="margin:8px 0 0">Estimate from ${it.matched.length} matched food${it.matched.length === 1 ? '' : 's'}${it.matched.some((x) => (it.map[x] || {}).approx) ? ' (some approximated from their ingredients)' : ''}, covering ${r0(it.coverage * 100)}% of your calories. Reference intakes are US NIH/NASEM adult values (sodium: WHO limit). Salt added in cooking and in restaurant food isn't in the database, so real sodium is likely higher.</p>
+        `<p class="hint" style="margin:8px 0 0">Estimate from ${it.matched.length} matched food${it.matched.length === 1 ? '' : 's'}${it.matched.some((x) => (it.map[x] || {}).approx) ? ' (some approximated from their ingredients)' : ''}, covering ${r0(it.coverage * 100)}% of your calories. Reference intakes are US NIH/NASEM values for your age and sex (sodium: WHO limit). Salt added in cooking and in restaurant food isn't in the database, so real sodium is likely higher.</p>
         ${it.unmatched.length ? `<p class="hint" style="margin:6px 0 0">Not matched, so not counted: ${esc(it.unmatched.slice(0, 8).join(', '))}${it.unmatched.length > 8 ? '…' : ''}</p>` : ''}
         <details class="mlist"><summary>Which foods were matched</summary><ul>${it.matched.map((n) => `<li><b>${esc(n)}</b>${(it.map[n] || {}).approx ? ' <span class="chip">approximated</span>' : ''} <small>${esc((it.map[n] || {}).desc || '')}</small></li>`).join('')}</ul></details>`;
     } else body = '<p class="hint" style="margin:0 0 8px">Turn your logged foods into real vitamin and mineral numbers using USDA food data.</p>';
@@ -224,7 +229,7 @@
     const it = c.it = await intake(c);
     c.sig += '|' + (it ? it.matched.length + ':' + r0(it.coverage * 100) : 0);          // a new food match makes an old analysis out of date
     const pending = it ? c.list.filter((f) => it.map[f.name] === undefined).length : 0;
-    const underage = c.prof && !(c.prof.age >= 19);
+    const underage = c.prof && !(c.prof.age >= 14);
     $('#nIntake').hidden = c.counted < 3 || !!underage || !c.prof;
     if (!$('#nIntake').hidden) $('#nIntake').innerHTML = intakeHTML(c, it, pending);
     if (c.counted < 3) {
@@ -266,7 +271,7 @@
       if (m.wait) return '<div class="msg ai wait">Checking trusted sources…</div>';
       if (m.err) return `<div class="msg ai err">${esc(m.text)}</div>`;
       if (m.plain) return `<div class="msg ai ans"><div>${esc(m.text)}</div>${m.act ? Actions.html(m.act, i, esc) : ''}</div>`;
-      const cov = { sourced: ['From trusted sources', 'ok'], partial: ['Partly sourced', 'mid'], general: ['General advice, no source found', 'low'] }[m.coverage] || ['', ''];
+      const cov = { sourced: ['From trusted sources', 'ok'], partial: ['Partly sourced', 'mid'], data: ['From your food log', 'ok'], general: ['General advice, no source found', 'low'] }[m.coverage] || ['', ''];
       return `<div class="msg ai ans"><div>${linkify(m.text)}</div>
         <span class="chip cov ${cov[1]}">${cov[0]}</span>
         ${m.sources && m.sources.length ? `<ol class="srcs">${m.sources.map((s) => /^https?:\/\//.test(s.url) ? `<li value="${s.n}"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title || host(s.url))}</a> <small>${esc(host(s.url))}</small></li>` : '').join('')}</ol>` : ''}
@@ -330,6 +335,12 @@ Return ONLY this JSON: {"reply":"one or two plain sentences","actions":[],"answe
           qa.busy = false; $('#nSend').disabled = false; renderQA(); return;
         }
         if (!e.answer && e.reply) { qa.msgs.pop(); qa.msgs.push({ role: 'ai', text: e.reply, plain: true }); qa.busy = false; $('#nSend').disabled = false; renderQA(); return; }
+      }
+      if (/lack|miss|short|low in|deficien|need more|not getting|enough|vitamin|mineral|nutrient|iron|calcium|fib(?:re|er)|magnesium|zinc|b12|folate|potassium|diet/i.test(text)) {
+        try {   // so the answer has real vitamin and mineral numbers: match any logged foods not yet looked up (saved on the phone, done once per food)
+          const c0 = await gather(14);
+          if (c0.counted >= 3 && c0.prof && c0.prof.age >= 14) { const map = await getMap(); if (c0.list.some((f) => map[f.name] === undefined)) await matchFoods(c0); }
+        } catch (x) {}
       }
       const r = await AI.answer({ question: text, context: await askContext(), region, history: hist, prevQuestion: prevQ ? prevQ.text : '' });
       qa.msgs.pop();
