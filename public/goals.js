@@ -85,7 +85,7 @@
 
   window.Plate.openGoals = () => open(false);
   $('#kcalGoal').addEventListener('click', () => open(false));
-  $('#editGoalsBtn').addEventListener('click', () => { $('#settingsDlg').close(); open(false); });
+  $('#editGoalsBtn').addEventListener('click', () => open(false));
 
   // first run: ask once
   /* ... but only once you are signed in and your account's data has arrived (it may already hold your profile) */

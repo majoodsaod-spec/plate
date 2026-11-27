@@ -124,16 +124,22 @@
   }
 
   /* the daily goal row in Settings */
+  let known = null;
   async function drawGoalRow() {
     const g = await DB.get('waterGoal', null), ml = await goalMl();
-    $('#wgVal').textContent = nf(ml); $('#wgNote').textContent = g && g.ml ? 'Your own goal' : 'Suggested from your weight (35 ml per kg)';
+    known = ml; $('#wgVal').textContent = nf(ml); $('#wgNote').textContent = g && g.ml ? 'Your own goal' : 'Suggested from your weight (35 ml per kg)';
   }
+  /* the goal buttons answer at once: the number changes on touch, the save and the redraw of the water card happen a moment later (and only once if you tap several times) */
+  let cur = null, saveT = 0;
   async function bump(dir) {
-    const ml = Math.max(MIN, Math.min(MAX, (await goalMl()) + dir * STEP));
-    await DB.set('waterGoal', { ml }); FX.play('pop'); await drawGoalRow(); if (shown) draw(shown);
+    if (cur == null) cur = known != null ? known : await goalMl();
+    cur = Math.max(MIN, Math.min(MAX, cur + dir * STEP));
+    $('#wgVal').textContent = nf(cur); $('#wgNote').textContent = 'Your own goal'; FX.play('tick'); FX.haptic(6);
+    clearTimeout(saveT);
+    saveT = setTimeout(async () => { const ml = cur; await DB.set('waterGoal', { ml }); cur = null; requestAnimationFrame(() => { if (shown) draw(shown); }); }, 450);
   }
-  $('#wgMinus').addEventListener('click', () => bump(-1));
-  $('#wgPlus').addEventListener('click', () => bump(1));
+  const quick = (el, fn) => { let at = 0; el.addEventListener('pointerdown', (e) => { if (e.button > 0 || !e.isPrimary) return; at = performance.now(); fn(); }); el.addEventListener('click', () => { if (performance.now() - at > 800) fn(); }); };
+  quick($('#wgMinus'), () => bump(-1)); quick($('#wgPlus'), () => bump(1));
 
   draw(window.Plate.viewDay ? window.Plate.viewDay() : DB.dayKey()).catch(() => {});
   window.Water = { render: (day) => draw(day || DB.dayKey()), drawGoalRow, total: totalOf, goal: goalMl };
