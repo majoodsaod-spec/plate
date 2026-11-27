@@ -53,6 +53,7 @@
     if (!quiet) window.scrollTo(0, 0);
   }
   hooks.eat = () => showEat(eatSub, true);
+  const warmed = {};
   function showTab(name, remember) {
     if (!TABS.includes(name)) name = 'today';
     const was = current; if (name === 'me' && was !== 'me') backTo = was; current = name;
@@ -62,9 +63,12 @@
     $('#meBack').hidden = name !== 'me'; $('#openSettings').hidden = name === 'me';
     document.documentElement.dataset.tab = name;
     if (remember !== false && name !== 'me') { try { localStorage.setItem('plate.tab', name); } catch (e) {} }
-    if (name === 'me') openSettings(); else if (hooks[name]) hooks[name]();
+    if (name === 'me') openSettings();
+    else if (hooks[name]) { if (!warmed[name]) { warmed[name] = 1; hooks[name](); } else setTimeout(() => hooks[name](), 0); }   // the page is already built: show it first, refresh it after the paint
     if (was !== name) { window.scrollTo(0, 0); if (window.FX && remember !== false) FX.play('pop', 0.6); }
   }
+  /* build every other tab once in the background, a little after start, so even the first visit to each is instant */
+  (window.requestIdleCallback || ((f) => setTimeout(f, 900)))(() => ['eat', 'gym', 'coach', 'insights'].forEach((n, i) => setTimeout(() => { if (n !== current && !warmed[n] && hooks[n]) { warmed[n] = 1; try { const r = hooks[n](); if (r && r.catch) r.catch(() => {}); } catch (e) {} } }, 300 + i * 250)));
   window.Plate.showTab = showTab; window.Plate.currentTab = () => current;
   $$('.dock [role="tab"]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
   $$('[data-esec]').forEach((b) => b.addEventListener('click', () => showEat(b.dataset.esec)));
@@ -200,7 +204,7 @@
   $('#regionClose').addEventListener('click', () => $('#regionDlg').close());
   $('#regionDlg').addEventListener('click', (e) => { if (e.target === $('#regionDlg') && !firstRegion) $('#regionDlg').close(); });
   $('#regionList').addEventListener('click', async (e) => { const b = e.target.closest('[data-c]'); if (!b) return; setRegion(b.dataset.c); await DB.set('region', region); $('#regionDlg').close(); });
-  $('#openSettings').addEventListener('click', openSettings);
+  $('#openSettings').addEventListener('click', () => showTab('me'));
   $('#meBack').addEventListener('click', () => showTab(backTo || 'today', false));
   /* sound and feel: every switch saves the moment it changes */
   function drawFx() {
@@ -279,3 +283,4 @@
     } catch (e) {}
   })();
 })();
+

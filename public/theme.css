@@ -51,9 +51,9 @@ html.kb-open .dock, html.chatlock .dock { transform: translateY(110%); }
 html.kb-open #gcForm, html.kb-open #nForm, html.kb-open #chatForm { bottom: calc(var(--kb) + 8px); }
 
 /* ---------- page and card motion ---------- */
-.view:not([hidden]):not(.esub) { animation: pageIn .16s var(--ease) backwards; }
-.esub:not([hidden]) { animation: pageIn .14s var(--ease) backwards; }
-@keyframes pageIn { from { opacity: 0; transform: translateY(4px); } }
+.view:not([hidden]):not(.esub) { animation: pageIn .1s linear backwards; }
+.esub:not([hidden]) { animation: pageIn .1s linear backwards; }
+@keyframes pageIn { from { opacity: .6; } }          /* opacity only: any transform here would trap the position:fixed chat composers inside the page for a frame */
 @keyframes riseIn { from { opacity: 0; transform: translateY(14px) scale(.985); } }
 .card { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
 h2 { font: 800 19px/1.2 var(--display); letter-spacing: -.02em; }
