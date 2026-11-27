@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const { $, esc } = window.Plate;
-  let dlg = null, reader = null, busy = false;
+  let dlg = null, reader = null, busy = false, timer = 0, session = 0;
   const r1 = (n) => Math.round(n * 10) / 10;
 
   function loadLib() {
@@ -27,22 +27,53 @@
     dlg.querySelector('#scanType').addEventListener('submit', (e) => { e.preventDefault(); const c = $('#scanCode').value.replace(/\D/g, ''); if (c.length >= 6) found(c); else msg('Type the full number under the barcode (8 to 13 digits).'); });
   }
   const msg = (t) => { const m = $('#scanMsg'); if (m) m.textContent = t; };
-  function stop() { try { reader && reader.reset(); } catch (e) {} reader = null; const v = $('#scanVid'); if (v && v.srcObject) { v.srcObject.getTracks().forEach((t) => t.stop()); v.srcObject = null; } }
+  function stop() { session++; clearTimeout(timer); timer = 0; reader = null; const v = $('#scanVid'); if (v && v.srcObject) { v.srcObject.getTracks().forEach((t) => t.stop()); v.srcObject = null; } }
   function close() { stop(); if (dlg && dlg.open) dlg.close(); }
 
   async function open() {
-    ensure(); busy = false; pending = null; $('#scanCode').value = ''; $('#scanLabel').hidden = true; dlg.querySelector('.scanSheet').classList.remove('noCam'); msg('Starting the camera…'); dlg.showModal();
+    ensure(); stop(); busy = false; pending = null; $('#scanCode').value = ''; $('#scanLabel').hidden = true; dlg.querySelector('.scanSheet').classList.remove('noCam'); msg('Starting the camera…'); dlg.showModal();
+    const my = session;                                                       // stop() (close, product found, reopen) bumps this, which ends everything started here
     try {
       await loadLib();
+      if (my !== session) return;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('This browser cannot open the camera here.');
       const Z = window.ZXing, hints = new Map();
       hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]);
       hints.set(Z.DecodeHintType.TRY_HARDER, true);
-      reader = new Z.BrowserMultiFormatReader(hints, 300);
-      await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } }, $('#scanVid'), (res) => { if (res && !busy) { try { navigator.vibrate && navigator.vibrate(60); } catch (e) {} found(res.getText()); } });
+      reader = new Z.BrowserMultiFormatReader(hints);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      if (my !== session) { stream.getTracks().forEach((t) => t.stop()); return; }   // cancelled while the permission prompt was open
+      const v = $('#scanVid'); v.srcObject = stream; await v.play().catch(() => {});
+      if (my !== session) return;
       msg('Point the camera at the barcode on the pack.');
+      loop(my, v, Z);
     } catch (e) {
+      if (my !== session) return;
       msg(e && e.name === 'NotAllowedError' ? 'Camera access is off. iPhone: Settings → Plate (or Safari) → Camera → Allow. You can also type the number below.' : (e.message || 'The camera did not start.') + ' You can type the number below.');
     }
+  }
+
+  /* Our own decode loop instead of the library's decodeFromConstraints: that one feeds the decoder every other frame colour-inverted, and with
+     TRY_HARDER on the decoder's own rotation flips that toggle once more per attempt, so the real frame was always the inverted one and nothing ever
+     decoded (typing the number worked, the camera never did). Here every frame is read as it is, a bad frame can never stop the loop,
+     and a slow phone is never asked to decode faster than it can. */
+  function loop(my, v, Z) {
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true }), t0 = Date.now();
+    let hinted = false;
+    const tick = () => {
+      if (my !== session) return;
+      if (!busy && v.videoWidth > 0 && v.readyState >= 2) {
+        try {
+          if (cv.width !== v.videoWidth || cv.height !== v.videoHeight) { cv.width = v.videoWidth; cv.height = v.videoHeight; }
+          cx.drawImage(v, 0, 0, cv.width, cv.height);
+          const res = reader.decodeBitmap(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv, false))));
+          if (res && my === session) { try { navigator.vibrate && navigator.vibrate(60); } catch (e) {} found(res.getText()); }
+        } catch (e) { /* no readable code in this frame (or the frame was not ready): try the next one */ }
+        if (!hinted && !busy && Date.now() - t0 > 10000) { hinted = true; msg('Still looking. Hold the pack steady about 15 cm away in good light, with the whole barcode inside the box. Or type the numbers below.'); }
+      }
+      timer = setTimeout(tick, busy ? 300 : 100);
+    };
+    tick();
   }
 
   /* the server tries, in order: Plate's shared list (products people here already scanned or photographed), Open Food Facts,
