@@ -23,7 +23,7 @@
 <header class="top">
   <div class="bar">
     <button class="icon back" id="meBack" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <h1><span id="pageTitle">Today</span> <small id="ver">v121</small></h1>
+    <h1><span id="pageTitle">Today</span> <small id="ver">v122</small></h1>
     <button class="icon" id="openSettings" type="button" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -63,12 +63,6 @@
       </div>
     </div>
     <div class="card water" id="waterCard" aria-label="Water"></div>
-    <div class="card steps" id="stepsCard">
-      <div class="sectionHead" style="padding:0 0 8px"><h2>Steps</h2><span class="hint" id="stepsTxt">Not added</span></div>
-      <form class="row" id="stepsForm" autocomplete="off"><input id="stepsIn" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Steps today" aria-label="Steps"><button type="submit" id="stepsSave">Save</button></form>
-      <p class="hint" id="stepsNote" style="margin:6px 0 0"></p>
-      <button type="button" class="link left" id="stepsAuto">Add steps automatically from your iPhone ›</button>
-    </div>
 
     <form class="card log" id="logForm" autocomplete="off">
       <label for="mealText" class="label">Log a meal</label>
@@ -313,10 +307,10 @@
       <label class="mini"><span>Weight</span><input id="gWeight" inputmode="decimal" placeholder="kg"></label>
     </div>
     <label class="mini"><span>Activity</span><select id="gActivity">
-      <option value="sedentary">Mostly sitting (desk day, few steps)</option>
+      <option value="sedentary">Mostly sitting (desk day, little walking)</option>
       <option value="light" selected>Light: some walking on a normal day</option>
       <option value="moderate">Moderate: on your feet a lot</option>
-      <option value="very">Very active: physical job or lots of steps</option></select></label>
+      <option value="very">Very active: physical job or lots of walking</option></select></label>
     <p class="hint" style="margin:-2px 0 0">Your daily life only. Workouts you log in the Gym tab are added on top, so they are not counted twice.</p>
     <label class="mini"><span>Goal</span><select id="gGoal">
       <option value="lose">Lose weight (about 0.5 kg a week)</option>

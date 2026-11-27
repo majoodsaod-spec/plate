@@ -90,6 +90,9 @@
       });
     },
     ageFrom,
+    /* removes a stored value completely (and tells the other devices to remove it too) */
+    dropKv(key) { return run('kv', 'readwrite', (s) => s.delete(key)).then(() => { if (!LOCAL.has(key)) note('kv', key, null, true); }); },
+    keysKv() { return run('kv', 'readonly', (s) => s.getAllKeys()).then((k) => k || []); },
     set(key, value) { return run('kv', 'readwrite', (s) => s.put({ key, value })).then(() => { if (!LOCAL.has(key)) note('kv', key, { key, value }); }); },
 
     /* backup: iOS can clear site data if the app goes unused for a long time, so keep an export */

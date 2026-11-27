@@ -269,4 +269,13 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) roll(); });
   window.addEventListener('focus', roll);
   arm();
+
+  /* one-time clean-up: the old steps feature is gone, so remove anything it saved (on this phone and, through sync, on the others) */
+  (async () => {
+    try {
+      await Auth.ready;
+      for (const k of await DB.keysKv()) if (/^steps:/.test(k) || k === 'stepsHook') await DB.dropKv(k);
+      const r = await DB.get('reminders', null); if (r && r.steps) { delete r.steps; await DB.set('reminders', r); }
+    } catch (e) {}
+  })();
 })();

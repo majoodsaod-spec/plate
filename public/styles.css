@@ -791,13 +791,6 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .pgLine { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .pgDot { fill: var(--card); stroke: var(--accent); stroke-width: 2; }
 .pgDot.best { fill: var(--accent); }
-/* steps */
-#stepsForm { gap: 8px; }
-#stepsForm input { flex: 1; min-width: 0; min-height: 44px; font: 400 16px/1.4 var(--font); color: var(--fg); background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; padding: 0 12px; }
-#stepsForm button { min-height: 44px; }
-#stepsAuto { margin-top: 4px; }
-#sxUrl { font-size: 13px !important; font-family: ui-monospace, Menlo, monospace; }
-.sxSteps { padding-left: 20px; margin: 6px 0 10px; display: grid; gap: 8px; font-size: 15px; line-height: 1.4; }
 /* reminders */
 .rmList { display: grid; gap: 4px; margin-top: 10px; }
 .rmRow { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0 2px; border-top: 1px solid var(--rule); }

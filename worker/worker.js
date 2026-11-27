@@ -2,7 +2,7 @@
    Binding:    DB (a Cloudflare D1 database; see schema.sql)       Cron: every 15 minutes (reminders; the daily backup runs in the 09:00 UTC slot = 12:00 in Qatar)
    Secrets:    GEMINI_API_KEY      (GROQ_API_KEY, TAVILY_API_KEY, FDC_API_KEY optional)   INVITE_CODE (optional: people need it to create an account)
    Variables:  ALLOWED_ORIGIN (optional, lock CORS to your app), AI_DAILY_LIMIT (default 150 per person), BACKUP_DAYS (default 30), PBKDF2_ITER (default 100000)
-   Routes:     POST /auth/*  (accounts)   GET|POST /sync/*  (data)   /backups  (daily copies)   /push/*  (reminders)   /hook/*  (steps from an iPhone Shortcut)
+   Routes:     POST /auth/*  (accounts)   GET|POST /sync/*  (data)   /backups  (daily copies)   /push/*  (reminders)
                POST /  (AI, needs a signed-in session)
 
    Request from the app (provider-neutral):
@@ -38,7 +38,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (!env.DB) return fail('The database is not connected to this Worker yet (binding DB).', 500);
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
-    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups') || path.startsWith('/push/') || path.startsWith('/hook/') || path.startsWith('/barcode')) {
+    if (path.startsWith('/auth/') || path.startsWith('/sync/') || path.startsWith('/backups') || path.startsWith('/push/') || path.startsWith('/barcode')) {
       try { return await accounts(req, env, path, reply, fail); } catch (e) { return fail('Server error: ' + e.message, 500); }
     }
     if (req.method !== 'POST') return fail('POST only', 405);
@@ -603,35 +603,13 @@ async function accounts(req, env, path, reply, fail) {
     return reply({ token: await makeSession(env, u.id, body.device), user: { id: u.id, email: u.email }, isNew });
   }
 
-  /* steps from the iPhone Shortcut: no session, just the private link's key */
-  if (path === '/hook/steps') {
-    await migrate(env);
-    const k = url.searchParams.get('k') || body.k || '';
-    if (!/^[A-Za-z0-9_-]{20,80}$/.test(k)) return fail('Missing or bad link. Copy it again from Plate.', 400);
-    const h = await env.DB.prepare('SELECT user_id, tz FROM hooks WHERE key_hash = ?').bind(await sha(k)).first();
-    if (!h) return fail('This link is no longer valid. Make a new one in Plate.', 403);
-    const raw = body.steps != null ? body.steps : url.searchParams.get('steps');
-    const n = Math.round(parseFloat(String(raw == null ? '' : raw).replace(/[^\d.]/g, '')));
-    if (!(n >= 0) || n > 150000) return fail('No step count found. In the Shortcut, the JSON field must be called steps.', 400);
-    const now = Date.now(), date = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || '')) ? body.date : localDay(now, h.tz), key = 'steps:' + date;
-    await env.DB.prepare('INSERT INTO rows (user_id, store, key, value, deleted, updated) VALUES (?,?,?,?,0,?) ON CONFLICT(user_id, store, key) DO UPDATE SET value = excluded.value, deleted = 0, updated = excluded.updated')
-      .bind(h.user_id, 'kv', key, JSON.stringify({ key, value: { steps: n, src: 'shortcut', ts: now } }), now).run();
-    return reply({ ok: true, steps: n, date });
-  }
-
   const user = await authed(req, env);
   if (!user) return fail('unauthorized', 401);
 
   if (path === '/barcode' || path.startsWith('/barcode/')) { await migrate(env); return barcodeRoute(env, user, path, url, body, reply, fail, req.method); }
 
-  if (path.startsWith('/push/') || path.startsWith('/hook/')) {
+  if (path.startsWith('/push/')) {
     await migrate(env);
-    if (path === '/hook/new' && req.method === 'POST') {
-      const k = b64(rnd(24)), tzm = clampTz(body.tz);
-      await env.DB.batch([env.DB.prepare('DELETE FROM hooks WHERE user_id = ?').bind(user.id),
-        env.DB.prepare('INSERT INTO hooks (key_hash, user_id, tz, created) VALUES (?,?,?,?)').bind(await sha(k), user.id, tzm, Date.now())]);
-      return reply({ url: url.origin + '/hook/steps?k=' + k });
-    }
     if (path === '/push/key') return reply({ key: (await vapid(env)).pub });
     if (path === '/push/sub' && req.method === 'POST') {
       const s = body.sub || {}, ep = String(s.endpoint || ''), keys = s.keys || {};
@@ -639,7 +617,6 @@ async function accounts(req, env, path, reply, fail) {
       const prefs = JSON.stringify(body.prefs || {}).slice(0, 4000);
       await env.DB.prepare('INSERT INTO push_subs (endpoint, user_id, p256dh, auth, prefs, tz, sent, created) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, prefs = excluded.prefs, tz = excluded.tz')
         .bind(ep, user.id, String(keys.p256dh), String(keys.auth), prefs, clampTz(body.tz), '{}', Date.now()).run();
-      await env.DB.prepare('UPDATE hooks SET tz = ? WHERE user_id = ?').bind(clampTz(body.tz), user.id).run();
       return reply({ ok: true });
     }
     if (path === '/push/unsub' && req.method === 'POST') { await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?').bind(String(body.endpoint || ''), user.id).run(); return reply({ ok: true }); }
@@ -732,14 +709,13 @@ async function runBackups(env) {
 }
 
 
-/* ===================== reminders (Web Push) and steps ===================== */
+/* ===================== reminders (Web Push) ===================== */
 let migrated = false;
 async function migrate(env) {
   if (migrated) return;
   await env.DB.batch([
     env.DB.prepare('CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, prefs TEXT NOT NULL, tz INTEGER NOT NULL DEFAULT 180, sent TEXT NOT NULL DEFAULT \'{}\', created INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS push_user ON push_subs (user_id)'),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS hooks (key_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, tz INTEGER NOT NULL DEFAULT 180, created INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS barcodes (code TEXT PRIMARY KEY, data TEXT NOT NULL, src TEXT NOT NULL, region TEXT NOT NULL DEFAULT \'\', by_user TEXT, updated INTEGER NOT NULL)'),
   ]);
@@ -748,7 +724,6 @@ async function migrate(env) {
 const clampTz = (t) => { t = Math.round(Number(t)); return isFinite(t) && Math.abs(t) <= 14 * 60 ? t : 180; };
 /* the user's calendar day and clock, from their UTC offset in minutes */
 const localDate = (ms, tz) => new Date(ms + tz * 60000);
-const localDay = (ms, tz) => localDate(ms, tz).toISOString().slice(0, 10);
 
 /* the server's own VAPID key pair: made once, kept in the database (nothing to set up) */
 let VAPID = null;
@@ -808,7 +783,6 @@ async function runReminders(env, nowMs) {
       if (p.water && p.water.on) (p.water.times || []).forEach((t, i) => slots.push({ id: 'water' + i, t, kind: 'water' }));
       if (p.weight && p.weight.on && (p.weight.days || []).includes(dow)) slots.push({ id: 'weight', t: p.weight.time, kind: 'weight' });
       if (p.workout && p.workout.on) slots.push({ id: 'workout', t: p.workout.time, kind: 'workout' });
-      if (p.steps && p.steps.on) slots.push({ id: 'steps', t: p.steps.time, kind: 'steps' });
       let changed = false;
       for (const sl of slots) {
         if (!due(sl.t) || sent[sl.id] === today) continue;
@@ -846,11 +820,6 @@ async function reminderFor(env, uid, sl, p, c) {
     const log = (await kvGet(env, uid, 'gymLog')) || [];
     if (Array.isArray(log) && log.some((l) => l && l.date === c.today && !l.other)) return null;
     return { title: 'Training day', body: 'Your workout for today is ready in the Gym tab.', tag: 'workout', tab: 'gym' };
-  }
-  if (sl.kind === 'steps') {
-    const s = await kvGet(env, uid, 'steps:' + c.today);
-    if (s && s.steps > 0) return null;
-    return { title: 'Add your steps', body: 'Type today\'s steps on the Today tab.', tag: 'steps', tab: 'today' };
   }
   return null;
 }
