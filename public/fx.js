@@ -167,8 +167,8 @@
 
   /* ---------- the small sounds the controls make ---------- */
   /* one soft tick for tabs, segments and chips; plain buttons stay quiet so the app does not chatter; the pitch varies a touch so it never feels mechanical */
-  const TICK = '[role="tab"], .seg, .chips button, .qr, .qchips button, summary, .rowBtn, .fastPick button, .wChip, .cBtn, .toolsBtn';
-  const QUIET = '.primary, [data-silent], .sendBtn, .dock button';
+  const TICK = '.chips button, .qr, .qchips button, summary, .rowBtn, .fastPick button, .wChip, .cBtn, .toolsBtn';
+  const QUIET = '.primary, [data-silent], .sendBtn, .dock button, [role="tab"], .seg';
   document.addEventListener('pointerdown', (e) => {
     if (!prefs.uiTicks || !prefs.sound) return;
     const t = e.target.closest && e.target.closest(TICK); if (!t || t.disabled || t.closest(QUIET)) return;

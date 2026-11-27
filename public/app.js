@@ -65,7 +65,7 @@
     if (remember !== false && name !== 'me') { try { localStorage.setItem('plate.tab', name); } catch (e) {} }
     if (name === 'me') openSettings();
     else if (hooks[name]) { if (!warmed[name]) { warmed[name] = 1; hooks[name](); } else setTimeout(() => hooks[name](), 0); }   // the page is already built: show it first, refresh it after the paint
-    if (was !== name) { window.scrollTo(0, 0); if (window.FX && remember !== false) FX.play('pop', 0.6); }
+    if (was !== name) { window.scrollTo(0, 0); }
   }
   /* build every other tab once in the background, a little after start, so even the first visit to each is instant */
   (window.requestIdleCallback || ((f) => setTimeout(f, 900)))(() => ['eat', 'gym', 'coach', 'insights'].forEach((n, i) => setTimeout(() => { if (n !== current && !warmed[n] && hooks[n]) { warmed[n] = 1; try { const r = hooks[n](); if (r && r.catch) r.catch(() => {}); } catch (e) {} } }, 300 + i * 250)));
