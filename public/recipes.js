@@ -296,6 +296,7 @@
     if (fresh && !named(userText || '').length) lines.push('Variety hint for this request (ignore it if the user named ingredients, a dish or a cuisine): lean toward ' + pick(PROT) + ' as ' + pick(STY) + '.');
     if ($('#halalOnly').checked) lines.push('Halal only: no pork and no alcohol.');
     if (prefs) lines.push('Food preferences: ' + prefs);
+    const ab = await Prompts.about(true); if (ab) lines.push(ab);
     return lines.join('\n');
   }
 

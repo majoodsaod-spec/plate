@@ -47,11 +47,12 @@ main { padding: 10px 14px calc(var(--dockH) + 28px); max-width: 560px; }
 .dock button:active svg { transform: scale(.86); }
 @keyframes pip { from { transform: scaleX(0); opacity: 0; } }
 html.kb-open .dock, html.chatlock .dock { transform: translateY(110%); }
-.composer { bottom: calc(var(--dockH) + 8px); }
+#gcForm, #nForm, #chatForm { bottom: calc(var(--dockH) + 8px); }
+html.kb-open #gcForm, html.kb-open #nForm, html.kb-open #chatForm { bottom: calc(var(--kb) + 8px); }
 
 /* ---------- page and card motion ---------- */
-.view:not([hidden]):not(.esub) { animation: pageIn .38s var(--ease) both; }
-.esub:not([hidden]) { animation: pageIn .3s var(--ease) both; }
+.view:not([hidden]):not(.esub) { animation: pageIn .38s var(--ease) backwards; }
+.esub:not([hidden]) { animation: pageIn .3s var(--ease) backwards; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(10px); } }
 .view > .card, .view > .sectionHead, .view > .list > li { animation: riseIn .45s var(--ease) both; }
 .view > .card:nth-child(2) { animation-delay: .04s; } .view > .card:nth-child(3) { animation-delay: .08s; } .view > .card:nth-child(4) { animation-delay: .12s; } .view > .card:nth-child(5) { animation-delay: .16s; }
@@ -101,8 +102,8 @@ button.seg.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 3px
 .bottle.splash { animation: splash .6s var(--spring); } .bottle.party { animation: party .9s var(--spring); }
 @keyframes splash { 30% { transform: scale(1.07, .95) rotate(-2deg); } 60% { transform: scale(.97, 1.04) rotate(1.5deg); } }
 @keyframes party { 20% { transform: scale(1.12) rotate(-5deg); } 45% { transform: scale(.96) rotate(4deg); } 70% { transform: scale(1.05) rotate(-2deg); } }
-.readout { position: absolute; left: 0; right: 0; top: 52%; text-align: center; pointer-events: none; color: #fff; text-shadow: 0 1px 10px rgba(0, 30, 60, .6); font: 800 25px/1 var(--display); letter-spacing: -.03em; }
-.readout span { font-size: 12px; font-weight: 600; margin-left: 1px; }
+.bottle ~ .readout, .wBottleWrap .readout, #waterCard .readout { position: absolute; left: 0; right: 0; top: 52%; text-align: center; pointer-events: none; color: #fff; text-shadow: 0 1px 10px rgba(0, 30, 60, .6); font: 800 25px/1 var(--display); letter-spacing: -.03em; }
+#waterCard .readout span { font-size: 12px; font-weight: 600; margin-left: 1px; }
 .wSide { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .wHead { display: flex; justify-content: space-between; align-items: center; }
 .streak { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px 4px 8px; border-radius: 99px; background: var(--card2); border: 1px solid var(--rule); font: 700 13px/1 var(--font); color: var(--muted); }
@@ -213,3 +214,16 @@ html[data-motion="off"] .view:not([hidden]), html[data-motion="off"] .view > .ca
 .gh3 { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted, #5b6b78); }
 .nfoot { text-align: center; margin: 0; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .cDot, .cOrb { animation: none; } }
+
+/* ---------- chat screens in Eat: the message box rests at the bottom, chat fills the space above ---------- */
+#recCreate:not([hidden]), #nAsk:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+#recCreate:not([hidden]) { min-height: calc(100dvh - var(--topH, 64px) - var(--dockH, 72px) - 330px); }
+#nAsk:not([hidden]) { min-height: calc(100dvh - var(--topH, 64px) - var(--dockH, 72px) - 190px); }
+#recCreate .chat, #nAsk .chat { flex: 1; min-height: 100px; }
+.chatBar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.chatBar select { flex: 1; min-width: 120px; min-height: 40px; border-radius: 12px; }
+.chatBar button { min-height: 38px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--card); border: 1px solid var(--rule); color: inherit; padding: 0 12px; }
+details.card.prefs > summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.card.prefs > summary::-webkit-details-marker { display: none; }
+details.card.prefs > summary::after { content: ''; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .25s var(--spring); }
+details.card.prefs[open] > summary::after { transform: rotate(225deg); }

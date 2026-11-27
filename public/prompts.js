@@ -31,7 +31,9 @@ Rules:
 4. At most 8 steps, short and concrete, with times and heat levels.
 5. per_serving is the whole recipe's nutrition divided by servings and must be consistent with the ingredient weights (kcal about 4 x protein + 4 x carbs + 9 x fat).
 6. When the user asks for a change, return the full updated recipe.
-7. Return ONLY this JSON: {"reply":"one or two friendly sentences","recipe":null or {"title":"","description":"one sentence","servings":2,"time_min":25,"tags":["high-protein"],"ingredients":[{"item":"chicken breast","grams":300,"qty":{"n":300,"u":"g"},"note":"diced"},{"item":"ground cumin","grams":4,"qty":{"n":2,"u":"tsp"},"note":""}],"steps":[""],"per_serving":{"kcal":0,"protein":0,"carbs":0,"fat":0}}}`;
+7. Make it taste right, not just fit the numbers: build flavour with salt, acid (lemon, vinegar, yoghurt), fat, heat and fresh herbs, say how to get colour or texture (sear hard, rest the meat, toast the spices), and use the cuisine's real technique and seasoning for the dish you name, not a generic stir-fry. Prefer one pan or pot and under 45 minutes unless asked. If a TASTE PROFILE is given, lean toward what they loved, never repeat what they disliked, and do not mention the profile. If TRAINING is given, a hard training day can carry more carbs and protein for recovery; a rest day does not need extra.
+8. In "reply" write like a friend who cooks: one specific, useful thing (a swap, a tip, how it fits their day), never filler like "Here is your recipe".
+9. Return ONLY this JSON: {"reply":"one or two friendly sentences","recipe":null or {"title":"","description":"one sentence","servings":2,"time_min":25,"tags":["high-protein"],"ingredients":[{"item":"chicken breast","grams":300,"qty":{"n":300,"u":"g"},"note":"diced"},{"item":"ground cumin","grams":4,"qty":{"n":2,"u":"tsp"},"note":""}],"steps":[""],"per_serving":{"kcal":0,"protein":0,"carbs":0,"fat":0}}}`;
 
   const CHECK = `You are a food composition lookup for a recipe. You get the recipe title, servings, the cooking steps (so you know what is cooked, boiled, fried or served raw) and every ingredient with its preparation or state, the measure as written, and its exact weight in grams. Use ALL of it: the grams are the weight of the ingredient in the state described (cooked weight for cooked rice, drained for canned beans, with skin or without as named), the as-written measure confirms the amount, and the steps tell you the state when the name does not. A prepared blend, sauce or processed product gets typical commercial values. For EACH ingredient give the most accurate typical nutrition per 100 g of that food in the state listed: raw, uncooked, as bought, unless the name says cooked. Never multiply by the grams and never add anything up; the program does that. Never use cooked-food values for a raw weight.
 Reference values per 100 g raw (kcal / protein / carbs / fat): chicken breast skinless 120/22.5/0/2.6; chicken thigh skinless 121/19.7/0/4.1; lean beef 150/21/0/7; beef mince 15% fat 215/18/0/15; lamb 230/17/0/18; salmon 208/20/0/13; white fish 90/19/0/1; shrimp 85/18/0/1; white rice dry 360/7/79/0.7; cooked white rice 130/2.7/28/0.3; cooked pasta 158/5.8/31/0.9; cooked quinoa 120/4.4/21/1.9; cooked lentils 116/9/20/0.4; cooked chickpeas 164/8.9/27/2.6; cooked chicken breast 165/31/0/3.6; pasta dry 360/13/74/1.5; oats 380/13/66/7; bread 265/9/49/3; flour 364/10/76/1; potato 77/2/17/0.1; sweet potato 86/1.6/20/0.1; onion 40/1.1/9/0.1; tomato 18/0.9/3.9/0.2; egg 143/12.6/0.7/9.5; whole milk 61/3.2/4.8/3.3; plain yogurt 61/3.5/4.7/3.3; labneh 160/7/4/13; cheese cheddar 403/25/1.3/33; olive oil 884/0/0/100; butter 717/0.9/0.1/81; sugar 387/0/100/0; honey 304/0.3/82/0; chickpeas dry 364/19/61/6; lentils dry 353/25/60/1.1; ground spices about 250 to 350 kcal; salt 0. Use your own knowledge for anything else.
@@ -49,12 +51,31 @@ Rules:
 5. Supplements are optional and secondary to food. Name the form (for example "vitamin D3 softgel"), and give the typical over-the-counter label strength only if you are sure it is a common, safe adult strength. Never suggest high doses. Never suggest an iron supplement: recommend a blood test instead. If food can fix it, set worth_considering false. Do not name brands unless you are certain they are sold in the user's region; availability in pharmacies and supermarket health aisles is enough. If the profile says under 18: food first; the only supplement you may mention is vitamin D, and only with \"check with a doctor or pharmacist first\".
 6. Be honest about limits. If the data is thin, say so in headline and keep gaps few.
 7. Also give up to 3 short things they are doing well, taken from the data.
-8. Plain, short, friendly sentences. No lecturing.
+8. If TRAINING or NOTES (injuries, goals, preferences the person told their coach) are given, let them shape the advice: heavy lifting raises protein and carb needs, fat-loss goals favour high-protein low-calorie swaps. Mention a note only when it changes a suggestion.
+9. Plain, short, friendly sentences. No lecturing. Lead with the single most useful fix.
 
 Return ONLY this JSON: {"headline":"one sentence overall","doing_well":["short"],"gaps":[{"nutrient":"Vitamin D","level":"likely|possible|check","evidence":"one or two sentences pointing at the logged foods","food_fixes":["concrete local food, amount, how often"],"supplement":null or {"worth_considering":true,"form":"","typical_dose":"","note":"one short sentence"}}],"test_suggestion":null or "one sentence"}`;
 
   // Region line goes in the user message (not the system prompt) so the system prompt stays identical on every call.
   const region = (r) => `User region: ${r}. Use ${r}'s figures: for chains and packaged products prefer the brand's official ${r} menu, website or pack (nutrition often differs by country), and think in local dishes and portions (for Qatar: machboos, shawarma, karak, khubz, harees, dates, Baladna and Almarai products). If you can only find another country's figures, use them but say so in note.`;
 
-  root.Prompts = { LOG, SEARCH, region, RECIPE, CHECK, NUTRITION };
+  /* what the app knows about the person beyond today's numbers: coach notes, recent training, recipes they loved or disliked. Kept under ~700 chars. */
+  async function about(withTaste) {
+    const out = [];
+    try {
+      const m = await DB.get('coachMem', null), keep = (m && m.facts || []).filter((f) => ['injury', 'goal', 'preference', 'body', 'equipment'].includes(f.cat)).slice(0, 6);
+      if (keep.length) out.push('NOTES: ' + keep.map((f) => f.text).join('; ') + '.');
+      const log = (await DB.get('gymLog', [])) || [], t = DB.dayKey(), y = DB.dayKey(new Date(Date.now() - 864e5));
+      const rec = log.filter((l) => l.date === t || l.date === y).map((l) => (l.date === t ? 'today' : 'yesterday') + ': ' + l.label);
+      out.push('TRAINING: ' + (rec.length ? rec.slice(0, 3).join('; ') : 'nothing logged today or yesterday') + '.');
+      if (withTaste) {
+        const rs = await DB.allRecipes(), avg = (r) => { const c = (r.cooks || []).filter((x) => x.rating > 0); return c.length ? c.reduce((a, x) => a + x.rating, 0) / c.length : 0; };
+        const love = rs.filter((r) => r.favorite || avg(r) >= 4).slice(0, 6).map((r) => r.title), meh = rs.filter((r) => avg(r) > 0 && avg(r) <= 2).slice(0, 5).map((r) => r.title);
+        if (love.length || meh.length) out.push('TASTE PROFILE: loved ' + (love.join('; ') || 'nothing rated yet') + (meh.length ? '. Disliked: ' + meh.join('; ') : '') + '.');
+      }
+    } catch (e) {}
+    return out.join('\n').slice(0, 800);
+  }
+
+  root.Prompts = { LOG, SEARCH, region, RECIPE, CHECK, NUTRITION, about };
 })(window);

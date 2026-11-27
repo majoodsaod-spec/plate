@@ -153,6 +153,8 @@
   };
 
   /* ---------- the AI part ---------- */
+  /* adds coach notes and training context when the message still fits under the proxy's 6000-character limit */
+  async function withAbout(msg) { if (msg.length > 5000) return msg; const ab = await Prompts.about(false); return ab && msg.length + ab.length < 5900 ? msg + '\n' + ab : msg; }
   function buildMessage(c, region, prefs, it) {
     const p = c.prof, g = c.goals || {};
     const L = [];
@@ -250,7 +252,7 @@
     const c = cur, per = period;
     try {
       const region = (await DB.get('region', 'Qatar')) || 'Qatar', prefs = ((await DB.get('dietPrefs', '')) || '').trim();
-      const raw = await AI.askJSON({ task: 'nutrition', system: Prompts.NUTRITION, text: buildMessage(c, region, prefs, c.it), max_tokens: 1500 });
+      const raw = await AI.askJSON({ task: 'nutrition', system: Prompts.NUTRITION, text: await withAbout(buildMessage(c, region, prefs, c.it)), max_tokens: 1500 });
       const res = clean(raw); if (!res || !res.headline) throw new Error('The analysis came back incomplete. Try again.');
       const saved = period; period = per; await cachePut({ sig: c.sig, at: Date.now(), res }); period = saved;
     } catch (e) { busy = false; if ($('#nStatus')) { $('#nStatus').textContent = e.message; $('#nStatus').className = 'status bad'; } if ($('#nGo')) $('#nGo').disabled = false; return; }
@@ -320,6 +322,7 @@ Return ONLY this JSON: {"reply":"one or two plain sentences","actions":[],"answe
     L.push(prof ? `Profile: ${prof.sex}, ${prof.age} y, ${prof.height} cm, ${prof.weight} kg, goal ${prof.goal}, activity ${prof.activity}.` : 'Profile: not set.');
     L.push(goals && goals.kcal ? `Daily goals: ${goals.kcal} kcal, protein ${goals.protein} g, carbs ${goals.carbs} g, fat ${goals.fat} g.` : 'Daily goals: not set.');
     L.push('Food preferences: ' + (prefs || 'none') + '. Water today: ' + water + ' ml.');
+    const ab = await Prompts.about(false); if (ab) L.push(ab);
     L.push('WEIGHTS: ' + (ws.length ? ws.map((w) => w.date + ' ' + w.kg).join('; ') : 'none'));
     const head = L.join('\n'); let rows = meals.map((m) => `${m.id} | ${m.date} | ${String(m.name || '').slice(0, 40)} | ${Math.round(m.kcal || 0)} | ${Math.round(m.protein || 0)}/${Math.round(m.carbs || 0)}/${Math.round(m.fat || 0)}`);
     const tail = rec.length ? '\nRECIPES (id | title): ' + rec.map((r) => r.id + ' | ' + String(r.title || '').slice(0, 40)).join('; ') : '';
