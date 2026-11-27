@@ -14,24 +14,32 @@
     dlg = document.createElement('dialog'); dlg.id = 'scanDlg';
     dlg.innerHTML = `<div class="sheet scanSheet"><div class="closeRow"><button type="button" class="link" data-sc="close">Cancel</button></div>
       <h2 style="margin:0">Scan a barcode</h2>
-      <div class="scanView"><video id="scanVid" playsinline muted autoplay></video><div class="scanAim" aria-hidden="true"><i></i></div></div>
+      <div class="scanView"><video id="scanVid" playsinline muted autoplay></video><div class="scanAim" aria-hidden="true"><i></i></div><img id="scanSnap" alt="" hidden><div class="scanOk" hidden aria-hidden="true">✓</div></div>
       <p class="hint" id="scanMsg" role="status">Point the camera at the barcode on the pack.</p>
       <div id="scanLabel" hidden><label class="photoBtn primary" for="scanLabelIn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photo the nutrition label</label><input id="scanLabelIn" type="file" accept="image/*" capture="environment" hidden>
         <p class="hint" style="margin:6px 0 0">Plate reads it and remembers this barcode, so next time (on any of your devices) it is instant.</p></div>
+      <button type="button" id="scanRetry" class="primary" hidden>Scan again</button>
       <form class="row" id="scanType" autocomplete="off"><input id="scanCode" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="14" placeholder="Or type the numbers under it" aria-label="Barcode number"><button type="submit">Look up</button></form>
     </div>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.closest('[data-sc="close"]')) close(); });
     dlg.addEventListener('close', stop);
+    dlg.querySelector('#scanRetry').addEventListener('click', () => open());
     dlg.querySelector('#scanLabelIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) readLabel(f); });
     dlg.querySelector('#scanType').addEventListener('submit', (e) => { e.preventDefault(); const c = $('#scanCode').value.replace(/\D/g, ''); if (c.length >= 6) found(c); else msg('Type the full number under the barcode (8 to 13 digits).'); });
+  }
+  const unsnap = () => { const i = $('#scanSnap'), o = dlg && dlg.querySelector('.scanOk'); if (i) { i.hidden = true; i.removeAttribute('src'); } if (o) o.hidden = true; const r = $('#scanRetry'); if (r) r.hidden = true; const v = $('#scanVid'); if (v) v.style.visibility = ''; };
+  /* freeze the frame the code was read from, so it is obvious the scan worked while the lookup runs */
+  function snap() {
+    const v = $('#scanVid'), i = $('#scanSnap'); if (!v || !i || !(v.videoWidth > 0)) return;
+    try { const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0); i.src = c.toDataURL('image/jpeg', 0.7); i.hidden = false; v.style.visibility = 'hidden'; dlg.querySelector('.scanOk').hidden = false; } catch (e) {}
   }
   const msg = (t) => { const m = $('#scanMsg'); if (m) m.textContent = t; };
   function stop() { session++; clearTimeout(timer); timer = 0; reader = null; const v = $('#scanVid'); if (v && v.srcObject) { v.srcObject.getTracks().forEach((t) => t.stop()); v.srcObject = null; } }
   function close() { stop(); if (dlg && dlg.open) dlg.close(); }
 
   async function open() {
-    ensure(); stop(); busy = false; pending = null; $('#scanCode').value = ''; $('#scanLabel').hidden = true; dlg.querySelector('.scanSheet').classList.remove('noCam'); msg('Starting the camera…'); dlg.showModal();
+    ensure(); stop(); busy = false; pending = null; unsnap(); $('#scanCode').value = ''; $('#scanLabel').hidden = true; dlg.querySelector('.scanSheet').classList.remove('noCam'); msg('Starting the camera…'); dlg.showModal();
     const my = session;                                                       // stop() (close, product found, reopen) bumps this, which ends everything started here
     try {
       await loadLib();
@@ -83,7 +91,7 @@
   async function direct(code) {
     const f = 'product_name,product_name_en,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit,quantity,product_quantity';
     let j = null;
-    try { const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=${f}`); if (r.status === 404) j = { status: 0 }; else if (r.ok) j = await r.json(); } catch (e) {}
+    try { const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 7000); const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=${f}`, { signal: ac.signal }).finally(() => clearTimeout(tm)); if (r.status === 404) j = { status: 0 }; else if (r.ok) j = await r.json(); } catch (e) {}
     if (!j) throw new Error('offline');
     if (!j.product || j.status === 0) return null;
     const p = j.product, n = p.nutriments || {};
@@ -100,18 +108,20 @@
     let r = null;
     if (Auth.token()) {
       const region = (await DB.get('region', 'Qatar')) || 'Qatar';
-      try { r = await Auth.call('/barcode?code=' + code + '&region=' + encodeURIComponent(region)); }
-      catch (e) { if (e.offline) throw e; r = null; }                          // an old server: fall back below
+      const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 12000);   // the server may be slow or asleep: never wait forever
+      try { r = await Auth.call('/barcode?code=' + code + '&region=' + encodeURIComponent(region), { signal: ac.signal }); }
+      catch (e) { r = null; }                                                  // slow, old or unreachable server: ask Open Food Facts directly
+      finally { clearTimeout(tm); }
     }
     if (!r) { const p = await direct(code); r = p && !p.noData ? { found: true, product: p } : { found: false, name: p ? { name: p.name, brand: p.brand } : null }; }
     if (r.found) { cache[code] = r.product; const ks = Object.keys(cache); if (ks.length > 300) delete cache[ks[0]]; await DB.set('barcodes', cache); }
     return r;
   }
   async function found(code) {
-    if (busy) return; busy = true; msg('Found ' + code + '. Looking it up…');
+    if (busy) return; busy = true; snap(); msg('Got it: ' + code + '. Looking it up…');
     let r;
     try { r = await lookup(code); }
-    catch (e) { busy = false; msg('No connection, so the food could not be looked up. Try again when you are online.'); return; }
+    catch (e) { busy = false; stop(); $('#scanRetry').hidden = false; msg('Could not reach the food database (' + code + '). Check your connection, then scan again or tap Look up.'); return; }
     if (!r.found) {
       pending = { code, name: r.name };
       const nm = r.name && r.name.name ? `"${[r.name.brand, r.name.name].filter(Boolean).join(' ')}" was found, but not its calories. ` : 'This product is not in any of the food databases yet. ';

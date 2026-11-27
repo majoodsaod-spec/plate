@@ -815,6 +815,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .log #fileName:empty { display: none; }
 .photoBtn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 #scanLabel { margin: 4px 0 10px; }
+.scanView #scanSnap { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scanOk { position: absolute; right: 10px; top: 10px; width: 34px; height: 34px; border-radius: 50%; background: #46e08f; color: #052; display: grid; place-items: center; font-weight: 800; font-size: 20px; animation: scanPop .28s cubic-bezier(.2,1.4,.4,1) backwards; }
+@keyframes scanPop { from { transform: scale(.3); opacity: 0; } }
 .scanSheet.noCam .scanView { display: none; }
 /* ---------- chat polish ---------- */
 .msg.fxSend { animation: fxSend .3s cubic-bezier(.2, 1.25, .35, 1) both; transform-origin: 100% 100%; }
@@ -844,3 +847,4 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .md b { font-weight: 650; }
 /* lifted out of the way for an instant while the keyboard opens (see composer.js) */
 .composer.prefocus { position: fixed !important; top: calc(env(safe-area-inset-top) + 64px) !important; bottom: auto !important; left: 16px !important; right: 16px !important; opacity: 0 !important; transition: none !important; pointer-events: none; }
+#scanRetry[hidden], #scanSnap[hidden], .scanOk[hidden] { display: none !important; }
