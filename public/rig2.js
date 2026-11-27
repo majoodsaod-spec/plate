@@ -155,7 +155,19 @@
   }
 
   function frame(sc, p, e, theta, ex) {
-    const sx = sc.pose(p, e), J = solveBody(sx);
+    const sx = sc.pose(p, e);
+    /* the body is never still. Breathing: the shoulders lift a little on a slow inhale and drop on a faster exhale (about 4 s a breath, calmer when effort is low).
+       Effort tremor: near the hard end of a rep, at high effort, the hands shake with the 8-12 Hz physiological tremor that fatigue amplifies. Both are tiny and need the clock. */
+    if (ex && ex.t != null) {
+      const t = ex.t, per = 4.2 - 1.6 * e, ph = (t % per) / per, br = ph < 0.58 ? 0.5 - 0.5 * Math.cos(Math.PI * ph / 0.58) : 0.5 + 0.5 * Math.cos(Math.PI * (ph - 0.58) / 0.42);
+      const sh0 = sx.sh || [0, 0]; sx.sh = [sh0[0] + 0.55 * br * (0.6 + 0.4 * e), sh0[1] + 0.2 * br];
+      const fat = Math.max(0, (e - 0.8) / 0.2) * Math.max(0, (p - 0.7) / 0.3);        // 0 = fresh, 1 = at the hard end
+      if (fat > 0.02 && sx.arm) {
+        const arm0 = sx.arm, amp = 0.32 * fat;
+        sx.arm = (sd, Sh, Jx) => { const A = arm0(sd, Sh, Jx); if (!A || !A.W) return A; const ph1 = sd * 1.7, j = [0, amp * (Math.sin(t * 2 * Math.PI * 9.1 + ph1) + 0.6 * Math.sin(t * 2 * Math.PI * 11.3 + 2 * ph1)) * 0.6, amp * 0.6 * Math.sin(t * 2 * Math.PI * 10.2 + ph1 + 1)]; return Object.assign({}, A, { W: add(A.W, j), E: A.E ? add(A.E, mul(j, 0.5)) : A.E }); };
+      }
+    }
+    const J = solveBody(sx);
     const cam = camera(theta, sc.cam), S = cam.S, C = cam.C, px = (q) => cam.proj(q);
     const cap = (a, ra, b, rb) => capsulePath(px(a), ra * S, px(b), rb * S);
     const near = dot(J.L, C) >= 0 ? 1 : -1, far = -near;
@@ -915,6 +927,22 @@
   }
 
   /* ---------- timeline ---------- */
+  /* Human movement is not a cosine. A reach or a lift follows a minimum-jerk curve (a quintic: the smoothest possible path), whose speed is a bell shape that
+     starts and ends gently (Flash & Hogan 1985). On a hard concentric the bar also slows around 45% of the way up, the "sticking region", then speeds up again
+     (bar-velocity studies put the first speed peak near 14%, the dip near 46% and the second peak near 89% of the lift). The lowering is controlled and has no dip.
+     After a turnaround the weight settles with a small, quickly fading bounce (follow-through) instead of stopping dead. */
+  const mj = (k) => k * k * k * (10 - 15 * k + 6 * k * k);
+  const stickCache = {};
+  function sticking(k, s) {                              // minimum-jerk speed, dipped near 46%, integrated and normalised so it still ends exactly at 1
+    const key = s.toFixed(2); let tab = stickCache[key];
+    if (!tab) {
+      const N = 64; tab = new Float32Array(N + 1); let acc = 0;
+      for (let i = 1; i <= N; i++) { const u = (i - 0.5) / N, v = 30 * u * u * (1 - u) * (1 - u), g = Math.exp(-Math.pow((u - 0.46) / 0.12, 2)); acc += v * (1 - s * g) / N; tab[i] = acc; }
+      for (let i = 1; i <= N; i++) tab[i] /= acc;
+      stickCache[key] = tab;
+    }
+    const x = k * 64, i = Math.min(63, Math.floor(x)); return tab[i] + (tab[i + 1] - tab[i]) * (x - i);
+  }
   function makeTimeline(phases) {
     const CYCLE = phases.reduce((s, q) => s + q.dur, 0);
     return {
@@ -925,8 +953,14 @@
         for (let i = 0; i < phases.length; i++) {
           const q = phases[i];
           if (t < acc + q.dur || i === phases.length - 1) {
-            const k = Math.min(1, (t - acc) / q.dur), w = q.lin ? k : ease(k), e = q.e || [0.4, 0.4];
-            return { pull: lerp(q.from, q.to, w), eff: lerp(e[0], e[1], w), phase: i, k, t };
+            const k = Math.min(1, (t - acc) / q.dur), e = q.e || [0.4, 0.4];
+            let w = q.lin ? k : q.from === q.to ? 0 : (e[1] - e[0] > 0.3 && Math.max(e[0], e[1]) > 0.7) ? sticking(k, Math.min(0.3, 0.12 + 0.2 * e[1])) : mj(k);
+            let pull = lerp(q.from, q.to, w);
+            if (q.from === q.to && i > 0) {                                  // a hold right after a move: the weight settles
+              const pv = phases[i - 1], mv = pv.to - pv.from, tt = Math.min(0.9, t - acc);
+              if (Math.abs(mv) > 0.05) pull += Math.sign(mv) * Math.min(0.02, 0.025 * Math.abs(mv)) * Math.exp(-7 * tt) * Math.sin(2 * Math.PI * 2.4 * tt);
+            }
+            return { pull, eff: lerp(e[0], e[1], q.from === q.to ? k : mj(k)), phase: i, k, t };
           }
           acc += q.dur;
         }

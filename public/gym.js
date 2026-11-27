@@ -178,7 +178,13 @@
     if (demo.last === null) demo.last = now;
     const dt = Math.min(0.1, (now - demo.last) / 1000); demo.last = now;
     if (demo.playing) { demo.t += dt * demo.speed; demo.dirty = true; }
-    if (demo.dirty) { demo.dirty = false; draw(); }
+    if (demo.dirty) {
+      /* keep the motion smooth on a slow phone: if drawing a frame takes long, draw every other frame (time keeps running, so speed never changes) */
+      if (demo.slow && demo.skip) { demo.skip = false; } else {
+        demo.dirty = false; const t0 = performance.now(); draw(); const ms = performance.now() - t0;
+        demo.avg = demo.avg ? demo.avg * 0.9 + ms * 0.1 : ms; demo.slow = demo.avg > 9; demo.skip = demo.slow;
+      }
+    }
     raf = requestAnimationFrame(tick);
   }
   function setTheta(v) {
