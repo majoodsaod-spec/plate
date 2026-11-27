@@ -4,7 +4,8 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TABS = ['today', 'recipes', 'nutrition', 'gym', 'insights'];
+  const TABS = ['today', 'eat', 'gym', 'coach', 'insights', 'me'];
+  const TITLES = { today: 'Today', eat: 'Eat', gym: 'Train', coach: 'Coach', insights: 'Insights', me: 'Settings' };
   const hooks = {};                       // tab name -> function called when the tab opens
   /* A small bar at the bottom with one action, used for "Undo". One at a time; it fades after a few seconds. */
   let toastEl = null, toastT = null;
@@ -38,27 +39,44 @@
     close();
     return `<div class="md">${out.join('')}</div>`;
   }
-  window.Plate = { $, $$, esc, md, hooks, toast, refreshToday: () => renderToday(), refreshAll: () => { renderToday(); const t = TABS.find((x) => !$('#view-' + x).hidden); if (t && hooks[t]) hooks[t](); } };
+  window.Plate = { $, $$, esc, md, hooks, toast, refreshToday: () => renderToday(), refreshAll: () => { renderToday(); const t = TABS.find((x) => $('#view-' + x) && !$('#view-' + x).hidden); if (t && hooks[t]) hooks[t](); } };
 
   /* ---------- tabs ---------- */
+  let current = 'today', eatSub = 'recipes', backTo = 'today';
+  try { eatSub = localStorage.getItem('plate.eat') || 'recipes'; } catch (e) {}
+  function showEat(sub, quiet) {
+    if (sub !== 'recipes' && sub !== 'nutrition') sub = 'recipes';
+    eatSub = sub; try { localStorage.setItem('plate.eat', sub); } catch (e) {}
+    $$('[data-esec]').forEach((b) => b.classList.toggle('on', b.dataset.esec === sub));
+    $('#view-recipes').hidden = sub !== 'recipes'; $('#view-nutrition').hidden = sub !== 'nutrition';
+    if (hooks[sub]) hooks[sub]();
+    if (!quiet) window.scrollTo(0, 0);
+  }
+  hooks.eat = () => showEat(eatSub, true);
   function showTab(name, remember) {
     if (!TABS.includes(name)) name = 'today';
-    $$('[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    TABS.forEach((t) => { $('#view-' + t).hidden = t !== name; });
-    if (remember !== false) { try { localStorage.setItem('plate.tab', name); } catch (e) {} }
-    if (hooks[name]) hooks[name]();
-    window.scrollTo(0, 0);
+    const was = current; if (name === 'me' && was !== 'me') backTo = was; current = name;
+    $$('.dock [role="tab"]').forEach((b) => { const on = b.dataset.tab === name; b.setAttribute('aria-selected', String(on)); b.classList.toggle('on', on); });
+    TABS.forEach((t) => { const v = $('#view-' + t); if (v) v.hidden = t !== name; });
+    $('#pageTitle').textContent = TITLES[name];
+    $('#meBack').hidden = name !== 'me'; $('#openSettings').hidden = name === 'me';
+    document.documentElement.dataset.tab = name;
+    if (remember !== false && name !== 'me') { try { localStorage.setItem('plate.tab', name); } catch (e) {} }
+    if (name === 'me') openSettings(); else if (hooks[name]) hooks[name]();
+    if (was !== name) { window.scrollTo(0, 0); if (window.FX && remember !== false) FX.play('pop', 0.6); }
   }
-  $$('[role="tab"]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
-  $('.tabs').addEventListener('keydown', (e) => {
-    const i = TABS.indexOf(document.activeElement.dataset && document.activeElement.dataset.tab);
+  window.Plate.showTab = showTab; window.Plate.currentTab = () => current;
+  $$('.dock [role="tab"]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  $$('[data-esec]').forEach((b) => b.addEventListener('click', () => showEat(b.dataset.esec)));
+  $('.dock').addEventListener('keydown', (e) => {
+    const T = TABS.filter((t) => t !== 'me'), i = T.indexOf(document.activeElement.dataset && document.activeElement.dataset.tab);
     if (i < 0 || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
-    const n = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+    const n = T[(i + (e.key === 'ArrowRight' ? 1 : T.length - 1)) % T.length];
     $('#tab-' + n).focus(); showTab(n);
   });
 
   /* ---------- today ---------- */
-  const CIRC = 314.16, WATER_GOAL = 2500;
+  const CIRC = 314.16;
   let viewKey = null;                                   // null = follow today
   const curDay = () => viewKey || DB.dayKey();
   window.Plate.viewDay = curDay;
@@ -102,9 +120,7 @@
       $('#kcalRemain').textContent = '–';
       $('#ringFill').style.strokeDashoffset = String(CIRC);
     }
-    const wml = (await DB.get('water:' + day, 0)) || 0;
-    $('#waterTxt').textContent = nfmt(wml) + ' / ' + nfmt(WATER_GOAL) + ' ml';
-    $('#waterBar').style.width = Math.min(100, wml / WATER_GOAL * 100) + '%';
+    if (window.Water) Water.render(day, isToday);
     const list = $('#historyList');
     list.innerHTML = meals.map((m) =>
       `<li><button type="button" class="meal" data-id="${esc(m.id)}"><div class="name"><b>${esc(m.name)}</b><span>${new Date(m.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${m.protein ? ' · ' + Math.round(m.protein) + ' g protein' : ''}</span></div><span class="kcal">${Math.round(m.kcal)}</span></button></li>`
@@ -131,20 +147,14 @@
   $('#dayToday').addEventListener('click', () => goDay(null));
   $('#dayLabel').addEventListener('click', () => { const i = $('#dayPick'); try { i.showPicker(); } catch (e) { i.focus(); i.click(); } });
   $('#dayPick').addEventListener('change', (e) => goDay(e.target.value));
-  document.querySelector('[data-water]') && $('#view-today').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-water]'); if (!b) return;
-    const k = 'water:' + curDay(), v = Math.max(0, ((await DB.get(k, 0)) || 0) + parseInt(b.dataset.water, 10));
-    await DB.set(k, v); renderToday();
-  });
   /* ---------- settings: account, sync, backups ---------- */
-  const dlg = $('#settingsDlg');
   const when = (iso) => { try { return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function syncLine() {
     const s = Sync.status();
     $('#syncStatus').className = 'status' + (s.err ? ' bad' : '');
     $('#syncStatus').textContent = s.err || (s.last ? 'Synced ' + when(s.last) + (s.pending ? ' · ' + s.pending + ' waiting' : '') : 'Not synced yet.');
   }
-  window.addEventListener('plate-sync', () => { if (dlg.open) syncLine(); });
+  window.addEventListener('plate-sync', () => { if (current === 'me') syncLine(); });
   async function listBackups() {
     const box = $('#backupList'); box.innerHTML = '<p class="hint">Loading…</p>';
     try {
@@ -153,9 +163,10 @@
     } catch (e) { box.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
   }
   async function openSettings() {
-    const u = Auth.user(); $('#acctEmail').textContent = u ? 'Signed in as ' + u.email : '';
+    const u = Auth.user(); $('#acctEmail').textContent = u ? u.email : '';
+    $('#meName').textContent = u ? u.email.split('@')[0] : 'Your account'; $('#meAvatar').textContent = (u ? u.email[0] : 'P').toUpperCase();
     setRegion(await DB.get('region', 'Qatar'));
-    $('#testStatus').textContent = ''; $('#acctStatus').textContent = ''; syncLine(); dlg.showModal(); if (u) listBackups();
+    $('#testStatus').textContent = ''; $('#acctStatus').textContent = ''; syncLine(); drawFx(); if (window.Water) Water.drawGoalRow(); if (u) listBackups();
   }
   function setStatus(msg, kind) { const s = $('#testStatus'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
   const acct = (msg, kind) => { const s = $('#acctStatus'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); };
@@ -190,21 +201,32 @@
   $('#regionDlg').addEventListener('click', (e) => { if (e.target === $('#regionDlg') && !firstRegion) $('#regionDlg').close(); });
   $('#regionList').addEventListener('click', async (e) => { const b = e.target.closest('[data-c]'); if (!b) return; setRegion(b.dataset.c); await DB.set('region', region); $('#regionDlg').close(); });
   $('#openSettings').addEventListener('click', openSettings);
-  $('#closeSettings').addEventListener('click', () => dlg.close());
-  $('#settingsForm').addEventListener('submit', async (e) => { e.preventDefault(); await saveConn(); dlg.close(); });
+  $('#meBack').addEventListener('click', () => showTab(backTo || 'today', false));
+  /* sound and feel: every switch saves the moment it changes */
+  function drawFx() {
+    const p = FX.prefs; $('#fxSound').checked = p.sound; $('#fxHaptics').checked = p.haptics; $('#fxTicks').checked = p.uiTicks; $('#fxMotion').checked = p.motion; $('#fxVol').value = Math.round(p.volume * 100);
+    $('#fxVol').disabled = !p.sound; $('#fxTicks').disabled = !p.sound;
+  }
+  $('#fxSound').addEventListener('change', (e) => { FX.set('sound', e.target.checked); drawFx(); if (e.target.checked) FX.play('success'); });
+  $('#fxHaptics').addEventListener('change', (e) => { FX.set('haptics', e.target.checked); if (e.target.checked) FX.haptic([20, 40, 20]); });
+  $('#fxTicks').addEventListener('change', (e) => { FX.set('uiTicks', e.target.checked); });
+  $('#fxMotion').addEventListener('change', (e) => { FX.set('motion', e.target.checked); if (e.target.checked) FX.confetti('burst'); });
+  $('#fxVol').addEventListener('input', (e) => FX.set('volume', Number(e.target.value) / 100));
+  $('#fxVol').addEventListener('change', () => FX.play('blip'));
+  $('#settingsForm').addEventListener('click', (e) => { const b = e.target.closest('[data-try]'); if (!b) return; const n = b.dataset.try; FX.play(n); FX.haptic(n === 'win' || n === 'ding' ? [60, 40, 60] : 20); if (n === 'win') FX.confetti('burst'); });
   $('#testConn').addEventListener('click', async () => {
     setStatus('Testing…');
     try { await saveConn(); await AI.test(); setStatus('Connected. Everything is working.', 'ok'); }
     catch (err) { setStatus(err.message, 'bad'); }
   });
   $('#syncNow').addEventListener('click', async () => { $('#syncStatus').textContent = 'Syncing…'; await Sync.sync(); syncLine(); });
-  $('#signOutBtn').addEventListener('click', async () => { try { await Auth.signOut(); dlg.close(); } catch (e) { $('#syncStatus').className = 'status bad'; $('#syncStatus').textContent = e.message; } });
+  $('#signOutBtn').addEventListener('click', async () => { try { await Auth.signOut(); showTab('today', false); } catch (e) { $('#syncStatus').className = 'status bad'; $('#syncStatus').textContent = e.message; } });
   $('#backupNow').addEventListener('click', async () => { try { await Sync.flush(); await Auth.call('/backups/now', { body: {} }); await listBackups(); } catch (e) { $('#backupList').insertAdjacentHTML('afterbegin', `<p class="hint">${esc(e.message)}</p>`); } });
   $('#backupList').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-restore]'); if (!b) return;
     if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Tap again to restore'; return; }
     b.disabled = true; b.textContent = 'Restoring…';
-    try { await Sync.flush(); await Auth.call('/backups/restore', { body: { day: b.dataset.restore } }); await DB.set('syncCursor', 0); await Sync.sync(); dlg.close(); showTab(last, false); renderToday(); listBackups(); }
+    try { await Sync.flush(); await Auth.call('/backups/restore', { body: { day: b.dataset.restore } }); await DB.set('syncCursor', 0); await Sync.sync(); showTab('today', false); renderToday(); listBackups(); }
     catch (err) { b.textContent = err.message; }
   });
   $('#pwGo').addEventListener('click', async () => {
@@ -226,6 +248,7 @@
   /* ---------- boot ---------- */
   let last = 'today';
   try { last = localStorage.getItem('plate.tab') || 'today'; } catch (e) {}
+  if (last === 'recipes' || last === 'nutrition') { eatSub = last; last = 'eat'; }
   showTab(last, false);
   renderToday();
   Auth.init();

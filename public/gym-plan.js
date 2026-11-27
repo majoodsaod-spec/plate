@@ -39,7 +39,7 @@
   const ALL_MUSCLES = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'abs', 'obliques', 'traps', 'lowerback', 'glutes', 'abductors', 'quads', 'hamstrings', 'adductors', 'calves', 'cardio'];
   const GOALS = { muscle: 'Build muscle', strength: 'Get stronger', fat: 'Lose fat', fit: 'General fitness' };
 
-  const st = { sec: 'muscles', split: null, prev: null, prefs: { goal: 'muscle', minutes: 60, equip: 'gym' }, log: [], cur: null, seed: 1, busy: false, pick: null, coach: { msgs: [], busy: false }, tmp: null };
+  const st = { sec: 'muscles', split: null, prev: null, prefs: { goal: 'muscle', minutes: 60, equip: 'gym' }, log: [], cur: null, seed: 1, busy: false, pick: null, tmp: null };
 
   /* ---------- storage ---------- */
   const dayOf = (d) => (typeof d === 'string' ? { t: d } : d);
@@ -346,60 +346,6 @@
   function setSplit(name, days) { st.prev = { name: st.name, days: st.split.map((x) => ({ ...x })) }; st.name = name; st.split = days.map(dayOf); saveSplit(); renderPlan(); }
 
   /* ---------- AI: Coach and "ask for something specific" ---------- */
-  const DAY_KEYS = Object.keys(DAYS);
-  function catalogue() { return EX.map((x) => `${x.id}|${x.g}|${x.eq.join('+')}|${x.stars}|${x.type[0]}`).join('\n'); }
-  const SYSTEM = () => `You are the coach inside a personal gym app. You help one person decide what to train and you build workouts and weekly splits for them.
-
-HARD RULES
-1. Exercises: use ONLY exercises from the CATALOGUE below, by their exact id. Never invent, rename or alter an id. If the request needs something the catalogue lacks, say so in the reply and use the closest listed exercises.
-2. Respect the request: muscles, time available, equipment (an exercise is possible if the person has any of its listed equipment, the catalogue lists alternatives joined with +), and injuries or pain (avoid exercises that load the sore area; if pain is mentioned add one short line suggesting a physio or doctor; never diagnose).
-3. A workout has 3 to 9 exercises, about 10 minutes each at 3 sets, so match the time asked. Big compound lifts first, isolation after, abs and cardio last. For each exercise give sets 2-5, reps as a short string such as "8-12" or "30-45 s", and rest_s between 30 and 180.
-4. Use the person's data: today's slot in their split, what they trained in the last 14 days, muscles not trained in the last 7 days, and their goal. Avoid hammering the same muscles on consecutive days unless asked.
-5. The star numbers are a rough community rating from coach articles, not science. Prefer higher stars but choose for the person's needs. Never call the ratings scientific.
-6. Never give weights in kg. For "how heavy", say to pick a load that leaves 1 to 3 reps in reserve.
-7. Keep advice mainstream and honest about uncertainty. This is not medical advice.
-8. If the person wants to lose weight or fat (their words, their Training goal, or their Body goal), the workout MUST include cardio: pick 1 or 2 cardio exercises from the catalogue (g=cardio) with a duration in the reps field such as "25-30 min", about a third of the session, steady and sustainable rather than only intervals. Strength work stays, but fewer sets.
-9. A split has exactly 7 entries, Sunday first, each one of these DAY KEYS: ${DAY_KEYS.join(', ')}.
-
-ACTIONS: you can change the person's data. When they ask you to log, change, fix, move or delete something, or to set up their plan, put the changes in "actions" and say in "reply" what you did, in the past tense. Do only what they asked. If it is unclear which entry they mean, or a number is missing, ask one short question and leave actions empty. Dates are YYYY-MM-DD (see DATES). Exercise ids come only from the CATALOGUE. Copy "ts" values from LOGGED, never invent them. Ops:
-{"op":"log_workout","date":"","title":"","entries":[{"id":"","sets":[{"kg":60,"reps":8}]}]} (cardio entry {"id":"","f":{"min":30}}; holds use "sec", carries "kg" and "m")
-{"op":"log_activity","date":"","type":"walk|run|cycle|swim|football|padel|basket|martial|yoga|hiit|other","min":45}
-{"op":"update_log","ts":0,"date":"","title":"","entries":[the full new list]}  {"op":"delete_log","ts":0}
-{"op":"set_split","name":"","days":[7 day keys]}  {"op":"set_split_day","day":"thursday","type":"upper"} (or "groups":["chest","triceps"])
-{"op":"set_workout","title":"","items":[{"id":"","sets":3,"reps":"8-12","rest_s":90}]} (today's planned workout)  {"op":"clear_workout"}
-{"op":"set_gym_prefs","goal":"muscle|strength|fat|fit","minutes":60,"equip":"gym|home|dumbbells|bodyweight|bands|kettlebell|homegym|machines|custom","eq_text":""}  {"op":"set_weight","date":"","kg":80}
-If they pin a day ("I want Thursday to be upper body, build a plan around it"), the split must put exactly that on that day and build the other six days around it with rest between hard days.
-
-Reply with ONLY JSON, nothing else:
-{"reply":"at most 90 words, plain and friendly, no markdown","workout":null,"split":null,"actions":[]}
-"workout" is {"title":"...","items":[{"id":"...","sets":3,"reps":"8-12","rest_s":90}]}. Include it only when a workout is asked for or when you recommend what to train today. "split" is {"name":"...","days":[7 day keys]} and is only for split requests. Otherwise both stay null.
-
-CATALOGUE (id|main muscle|equipment|stars|c=compound i=isolation m=...):
-${catalogue()}`;
-
-  /* the recent log with the ids the coach needs to point at an entry (ts) and what was lifted, kept short */
-  function loggedLines(n) {
-    const rows = st.log.filter((l) => lastDays(21).includes(l.date)).sort((x, y) => y.ts - x.ts).slice(0, n == null ? 12 : n);
-    if (!rows.length) return 'LOGGED: nothing in the last 21 days.';
-    const sum = (l) => (l.detail || []).map((e) => e.kind === 'cardio' ? `${e.id}:${(e.f && e.f.min) || '?'}min` : `${e.id}:${(e.sets || []).map((s) => (s.kg != null ? s.kg : '') + (s.sec ? 's' + s.sec : s.m ? 'm' + s.m : 'x' + s.reps)).join(',')}`).join('; ');
-    return 'LOGGED (newest first, format ts | date | label | exercises id:kg x reps):\n' + rows.map((l) => `${l.ts} | ${l.date} | ${l.label}${l.other ? ' (activity ' + l.mins + 'min)' : ''} | ${sum(l)}`.slice(0, 230)).join('\n');
-  }
-  async function context(n) {
-    const ti = todayIdx(), log = st.log.filter((l) => lastDays(14).includes(l.date)).sort((a, b) => (a.date < b.date ? -1 : 1));
-    const prof = await DB.get('profile', null), tr = trainedRecently(7);
-    const lines = [
-      `Today: ${WEEK[ti]} ${DB.dayKey()}. Today's slot in their split: ${dayLabel(st.split[ti])}.`,
-      `Their week (Sunday first): ${st.split.map((d, i) => WK3[i] + ' ' + dayLabel(d)).join(', ')}.`,
-      `Training goal: ${GOALS[st.prefs.goal]}. Usual session length: ${st.prefs.minutes} min. Equipment they have: ${eqSentence()}. Only use exercises they can do with it.`,
-      prof ? `Body goal: ${prof.goal === 'lose' ? 'lose weight' : prof.goal === 'gain' ? 'gain weight' : 'maintain weight'}.` : '',
-      log.length ? 'Workouts logged in the last 14 days: ' + log.map((l) => `${l.date} ${l.label} (${(l.groups || []).filter((g) => g !== 'cardio').map((g) => GROUPS[g] ? GROUPS[g].name : g).join(', ') || 'cardio'})`).join('; ') + '.' : 'No workouts logged in the last 14 days.',
-      'Muscles not trained in the last 7 days: ' + (ALL_MUSCLES.filter((m) => m !== 'cardio' && !tr.has(m)).map((m) => GROUPS[m].name).join(', ') || 'none') + '.',
-      'DATES: ' + Actions.dateTable(),
-      st.cur ? `Today's planned workout: ${st.cur.title}${st.cur.done ? ' (already done)' : ''}.` : "No workout is planned for today.",
-      loggedLines(n),
-    ];
-    return lines.filter(Boolean).join('\n');
-  }
   function cleanWorkout(w, source) {
     if (!w || !Array.isArray(w.items)) return null;
     const seen = new Set(), items = [];
@@ -432,32 +378,6 @@ ${catalogue()}`;
     w.items = w.items.slice(0, 7).concat(add); w.mins = estMinutes(w.items); w.note = ((w.note || '') + ' Cardio added because you are aiming to lose weight.').trim();
     return w;
   }
-  async function coachCall(message, history) {
-    let ctx = '';
-    for (const n of [12, 8, 5, 3, 0]) { ctx = await context(n); if (ctx.length + message.length + 30 <= 5900) break; }     // the proxy cuts requests at 6000 characters, and the person's message is at the end
-    const r = await AI.askJSON({ task: 'coach', system: SYSTEM(), history, text: ctx + '\n\nTHE PERSON SAYS: ' + message, max_tokens: 1000 });
-    const reply = String(r.reply || '').slice(0, 900);
-    return { reply, workout: ensureCardio(cleanWorkout(r.workout, 'ai'), message), split: cleanSplit(r.split), askedWorkout: !!r.workout, askedSplit: !!r.split, actions: Array.isArray(r.actions) ? r.actions : [] };
-  }
-
-  /* ---------- Coach chat ---------- */
-  const CHIPS = ['I want Thursday to be upper body. Build a plan around that', 'What should I train today?', 'What have I been neglecting?', 'I only have 30 minutes', 'Build me a 4-day split', 'Chest and arms with dumbbells only'];
-  function renderCoach() {
-    const c = st.coach;
-    /* a redraw (a sync landing, a tab switch) must not eat what is being typed: keep the draft, the caret and the focus */
-    const old = $('#gcIn'), keep = old ? { v: old.value, s: old.selectionStart, e: old.selectionEnd, f: document.activeElement === old } : null;
-    $('#gCoach').innerHTML = `<div class="chat" id="gcChat" aria-live="polite">${c.msgs.length ? c.msgs.map((m, i) => {
-      if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>`;
-      if (m.wait) return '<div class="msg ai wait">Thinking…</div>';
-      if (m.err) return `<div class="msg ai err">${esc(m.text)}</div>`;
-      return `<div class="msg ai ans">${window.Plate.md(m.text)}${m.act ? Actions.html(m.act, i, esc) : ''}${m.workout ? `<div class="miniw"><b>${esc(m.workout.title)}</b><small>${m.workout.items.length} exercises · about ${m.workout.mins} min</small><ol>${m.workout.items.map((it) => `<li>${esc(EXMAP[it.id].name)} <small>${esc(it.dur || it.sets + ' × ' + it.reps)}</small></li>`).join('')}</ol><button type="button" class="primary" data-cw="${i}">Use this workout</button></div>` : ''}${m.split ? `<div class="miniw"><b>${esc(m.split.name)}</b><small>${m.split.days.map((k, j) => WK3[j] + ' ' + DAYS[k].label).join(' · ')}</small><button type="button" class="primary" data-cs="${i}">Use this split</button></div>` : ''}</div>`;
-    }).join('') : '<p class="hint">Ask what to train, or tell me to change something: log a workout, fix a logged set, move a day in your split, set the workout for today. I only use exercises from the Plate list, and every change has an Undo.</p>'}</div>
-      <div class="chips" id="gcChips">${(c.msgs.length ? [] : CHIPS).map((f) => `<button type="button" data-q="${esc(f)}">${esc(f)}</button>`).join('')}</div>
-      <form class="composer" id="gcForm" autocomplete="off"><textarea id="gcIn" rows="1" maxlength="400" placeholder="Ask your coach…" aria-label="Message"></textarea><button class="primary" type="submit" id="gcGo">Send</button></form>
-      <p class="hint nfoot">General fitness guidance, not medical advice. If something hurts, stop and see a doctor or physio.</p>`;
-    const last = $('#gcChat').lastElementChild; if (last && c.msgs.length > 1) last.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    const nw = $('#gcIn'); if (keep && nw && keep.v) { nw.value = keep.v; if (keep.f) { nw.focus({ preventScroll: true }); try { nw.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
-  }
   /* "I want Thursday to be upper body": whatever the AI built, a day the person pinned in their own words stays exactly as they said */
   const TYPE_WORDS = [[/\bupper\b/, 'upper'], [/\blower\b/, 'lower'], [/\bpush\b/, 'push'], [/\bpull\b/, 'pull'], [/\blegs?\b/, 'legs'], [/\bfull[ -]?body\b/, 'full'], [/\b(rest|off)\b/, 'rest'], [/\bcardio\b/, 'cardio']];
   const WD_RE = /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues?|wed|thurs?|fri|sat)\b/g;
@@ -480,27 +400,6 @@ ${catalogue()}`;
       return a;
     });
   }
-  async function coachAsk(text) {
-    text = (text || '').trim(); const c = st.coach; if (!text || c.busy) return;
-    c.busy = true;
-    const hist = c.msgs.filter((m) => !m.wait && !m.err).slice(-4).map((m) => ({ role: m.role === 'me' ? 'user' : 'model', text: m.text }));
-    c.msgs.push({ role: 'me', text }, { role: 'ai', wait: true }); renderCoach();
-    try {
-      const r = await coachCall(text, hist);
-      c.msgs.pop();
-      let t = r.reply || 'Here you go.', act = null;
-      if (r.actions.length) {
-        act = await Actions.run(pinDays(r.actions, text), 'coach');
-        await reload(); refreshToday();
-        if (!act.count) t = "I couldn't apply that, so nothing was changed.";
-      }
-      if (r.askedWorkout && !r.workout) t += '\n\n(I could not build a valid workout from the exercise list this time. Try rephrasing.)';
-      if (r.askedSplit && !r.split) t += '\n\n(I could not build a valid split this time. Try rephrasing.)';
-      c.msgs.push({ role: 'ai', text: t, workout: r.workout, split: r.split, act });
-    } catch (e) { c.msgs.pop(); c.msgs.push({ role: 'ai', text: e.message, err: true }); }
-    c.busy = false; renderCoach();
-  }
-
   /* ---------- events ---------- */
   function useWorkout(w) { st.cur = w; saveCur(); }
   async function saveSession(entries, label, groups, ids) {
@@ -573,29 +472,20 @@ ${catalogue()}`;
     const t = $('#gpAskIn').value.trim(); if (!t || st.busy) return;
     st.busy = true; $('#gpAskGo').disabled = true; err('Building…');
     try {
-      const r = await coachCall('Build me a workout for this request: ' + t, []);
+      const r = await window.Coach.buildWorkout(t);
       if (r.workout) { r.workout.note = r.reply; useWorkout(r.workout); err(''); refreshCur(); $('#gpAskIn').value = ''; }
       else err(r.reply || 'I could not build a workout from the exercise list for that. Try rephrasing.');
     } catch (x) { err(x.message); }
     st.busy = false; const g = $('#gpAskGo'); if (g) g.disabled = false;
   });
-  $('#gCoach').addEventListener('click', (e) => {
-    const q = e.target.closest('[data-q]'); if (q) { coachAsk(q.dataset.q); return; }
-    const un = e.target.closest('[data-undo]'); if (un) { const m = st.coach.msgs[+un.dataset.undo]; if (m && m.act && !m.act.undone) { m.act.undone = true; m.act.undo().then(async () => { await reload(); refreshToday(); renderCoach(); }); } return; }
-        const cw = e.target.closest('[data-cw]'); if (cw) { const m = st.coach.msgs[+cw.dataset.cw]; if (m && m.workout) { useWorkout(m.workout); showSec('plan'); } return; }
-    const cs = e.target.closest('[data-cs]'); if (cs) { const m = st.coach.msgs[+cs.dataset.cs]; if (m && m.split) { setSplit(m.split.name, m.split.days); showSec('plan'); } }
-  });
-  $('#gCoach').addEventListener('submit', (e) => { if (e.target.id !== 'gcForm') return; e.preventDefault(); const t = $('#gcIn').value; $('#gcIn').value = ''; coachAsk(t); });
-
   /* ---------- sections ---------- */
   async function showSec(s) {
     st.sec = s;
     try { localStorage.setItem('gym-sec', s); } catch (_) {}
     $$('[data-gsec]').forEach((b) => b.classList.toggle('on', b.dataset.gsec === s));
-    $('#gMuscles').hidden = s !== 'muscles'; $('#gPlan').hidden = s !== 'plan'; $('#gCoach').hidden = s !== 'coach';
+    $('#gMuscles').hidden = s !== 'muscles'; $('#gPlan').hidden = s !== 'plan';
     if (s === 'muscles' && window.Plate.hooks.gymMap) window.Plate.hooks.gymMap();
     if (s === 'plan') { if (!st.split) await load(); renderPlan(); }
-    if (s === 'coach') { if (!st.split) await load(); renderCoach(); }
   }
   $$('[data-gsec]').forEach((b) => b.addEventListener('click', () => showSec(b.dataset.gsec)));
   const prevHook = window.Plate.hooks.gym;
@@ -603,11 +493,11 @@ ${catalogue()}`;
   window.Plate.hooks.gym = async () => {
     if (!st.split) await load();
     let s = 'muscles'; try { s = localStorage.getItem('gym-sec') || 'muscles'; } catch (_) {}
-    if (!['muscles', 'plan', 'coach'].includes(s)) s = 'muscles';
+    if (!['muscles', 'plan'].includes(s)) s = 'muscles';
     showSec(s);
   };
   /* after the coach changes stored data: reload it and redraw whatever is showing */
   async function reload() { await load(); if (st.sec === 'plan') renderPlan(); refreshToday(); }
-  window.Plate.gymPlan = { generate, DAYS, suggestSplit, cleanWorkout, cleanSplit, state: st, estMinutes, reload, pinDays, pinsOf };
+  window.Plate.gymPlan = { generate, DAYS, suggestSplit, cleanWorkout, cleanSplit, ensureCardio, state: st, estMinutes, reload, pinDays, pinsOf, load, WEEK, WK3, GOALS };
   if (!$('#view-gym').hidden) window.Plate.hooks.gym();
 })();

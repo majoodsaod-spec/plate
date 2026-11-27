@@ -3,33 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101113" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#071118" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Plate">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <title>Plate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
 
 <header class="top">
   <div class="bar">
-    <h1>Plate <small id="ver" style="font:500 11px/1 var(--font);color:var(--muted);letter-spacing:0;margin-left:4px">v117</small></h1>
+    <button class="icon back" id="meBack" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1><span id="pageTitle">Today</span> <small id="ver">v119</small></h1>
     <button class="icon" id="openSettings" type="button" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button role="tab" id="tab-today" data-tab="today" aria-controls="view-today" aria-selected="true">Today</button>
-    <button role="tab" id="tab-recipes" data-tab="recipes" aria-controls="view-recipes" aria-selected="false">Recipes</button>
-    <button role="tab" id="tab-nutrition" data-tab="nutrition" aria-controls="view-nutrition" aria-selected="false">Nutrition</button>
-    <button role="tab" id="tab-gym" data-tab="gym" aria-controls="view-gym" aria-selected="false">Gym</button>
-    <button role="tab" id="tab-insights" data-tab="insights" aria-controls="view-insights" aria-selected="false">Insights</button>
-  </nav>
 </header>
+
+<nav class="dock" role="tablist" aria-label="Sections">
+  <button role="tab" id="tab-today" data-tab="today" aria-controls="view-today" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/></svg><span>Today</span></button>
+  <button role="tab" id="tab-eat" data-tab="eat" aria-controls="view-eat" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M17 21V3c-2.5 1.5-3.5 4-3.5 7 0 2 1 3 3.500 3"/></svg><span>Eat</span></button>
+  <button role="tab" id="tab-gym" data-tab="gym" aria-controls="view-gym" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.500 6.500v11M3 9v6M21 9v6M6.500 12h11"/></svg><span>Train</span></button>
+  <button role="tab" id="tab-coach" data-tab="coach" aria-controls="view-coach" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.800 7L4 20.500 5.500 16A8 8 0 1 1 21 12z"/><path d="M9 11h.01M12 11h.01M15 11h.01"/></svg><span>Coach</span></button>
+  <button role="tab" id="tab-insights" data-tab="insights" aria-controls="view-insights" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span>Insights</span></button>
+</nav>
 
 <main>
   <!-- 1. Today -->
@@ -55,11 +62,7 @@
         <div><b id="fatEaten">0 g</b><span>Fat</span><i><u id="barF"></u></i></div>
       </div>
     </div>
-    <div class="card water">
-      <div class="sectionHead" style="padding:0 0 8px"><h2>Water</h2><span class="hint" id="waterTxt">0 / 2,500 ml</span></div>
-      <div class="wbar"><u id="waterBar"></u></div>
-      <div class="row wrap"><button type="button" data-water="250">+ 250 ml</button><button type="button" data-water="500">+ 500 ml</button><button type="button" class="link" data-water="-250">Undo 250</button></div>
-    </div>
+    <div class="card water" id="waterCard" aria-label="Water"></div>
     <div class="card steps" id="stepsCard">
       <div class="sectionHead" style="padding:0 0 8px"><h2>Steps</h2><span class="hint" id="stepsTxt">Not added</span></div>
       <form class="row" id="stepsForm" autocomplete="off"><input id="stepsIn" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Steps today" aria-label="Steps"><button type="submit" id="stepsSave">Save</button></form>
@@ -97,8 +100,13 @@
     <p class="empty" id="historyEmpty">No meals logged this day.</p>
   </section>
 
-  <!-- 2. Recipes -->
-  <section class="view" id="view-recipes" role="tabpanel" aria-labelledby="tab-recipes" hidden>
+  <!-- 2. Eat: Recipes and Nutrition -->
+  <section class="view" id="view-eat" role="tabpanel" aria-labelledby="tab-eat" hidden>
+    <div class="segs wide" role="group" aria-label="Eat sections">
+      <button type="button" class="seg on" data-esec="recipes">Recipes</button>
+      <button type="button" class="seg" data-esec="nutrition">Nutrition</button>
+    </div>
+  <div class="view esub" id="view-recipes">
     <div class="segs wide" role="group" aria-label="Recipes">
       <button type="button" class="seg on" data-rtab="create">Create</button>
       <button type="button" class="seg" data-rtab="saved">Saved <span id="savedCount"></span></button>
@@ -135,10 +143,9 @@
       <div class="recGrid" id="recGrid"></div>
       <p class="empty" id="recEmpty">No saved recipes yet. Create one and tap Save.</p>
     </div>
-  </section>
+  </div>
 
-  <!-- 3. Nutrition -->
-  <section class="view" id="view-nutrition" role="tabpanel" aria-labelledby="tab-nutrition" hidden>
+  <div class="view esub" id="view-nutrition" hidden>
     <div class="segs wide" role="group" aria-label="Nutrition">
       <button type="button" class="seg on" data-ntab="over">Overview</button>
       <button type="button" class="seg" data-ntab="ask">Ask</button>
@@ -164,14 +171,15 @@
       </form>
     </div>
     <p class="hint nfoot">Estimated from the foods you logged, not from a blood test. Food you didn't log isn't counted. This is general information, not medical advice. If you are pregnant, on medication or have a health condition, ask a doctor or pharmacist before taking any supplement.</p>
+  </div>
+
   </section>
 
   <!-- 4. Gym -->
   <section class="view" id="view-gym" role="tabpanel" aria-labelledby="tab-gym" hidden>
-    <div class="segs wide three" role="group" aria-label="Gym sections">
+    <div class="segs wide" role="group" aria-label="Gym sections">
       <button type="button" class="seg on" data-gsec="muscles">Muscles</button>
       <button type="button" class="seg" data-gsec="plan">Plan</button>
-      <button type="button" class="seg" data-gsec="coach">Coach</button>
     </div>
     <div id="gMuscles" class="view">
       <div class="segs wide" role="group" aria-label="Body side">
@@ -188,13 +196,68 @@
       <div id="gPanel"></div>
     </div>
     <div id="gPlan" class="view" hidden></div>
-    <div id="gCoach" class="view" hidden></div>
+  </section>
+
+  <!-- Coach -->
+  <section class="view" id="view-coach" role="tabpanel" aria-labelledby="tab-coach" hidden>
+    <div id="gCoach" class="view"></div>
   </section>
 
   <!-- 5. Insights -->
   <section class="view" id="view-insights" role="tabpanel" aria-labelledby="tab-insights" hidden>
     <div id="insBody" class="view"></div>
     <input type="file" id="insFile" accept="application/json,.json" hidden>
+  </section>
+  <!-- Settings (opened from the gear in the header) -->
+  <section class="view" id="view-me" aria-label="Settings" hidden>
+    <form id="settingsForm" class="mePage" autocomplete="off" onsubmit="return false">
+      <div class="meHero">
+        <div class="avatar" id="meAvatar" aria-hidden="true">P</div>
+        <div><b id="meName">Your account</b><span id="acctEmail" class="hint"></span></div>
+      </div>
+      <p class="status" id="syncStatus" role="status"></p>
+      <div class="group">
+        <button type="button" class="rowBtn" id="syncNow"><span class="ri" style="--c:#2fb0f2"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.500 6.200M3 12A9 9 0 0 1 18.500 5.800M18 2v4h-4M6 22v-4h4"/></svg></span><span class="rl"><b>Sync now</b><small>Your data is also saved on this phone</small></span></button>
+      </div>
+
+      <h2 class="h2s">Profile</h2>
+      <div class="group">
+        <button type="button" class="rowBtn" id="editGoalsBtn"><span class="ri" style="--c:#46c08f"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="rl"><b>Profile and goals</b><small id="goalsSub">Calories, protein, body details</small></span><i class="chev"></i></button>
+        <button type="button" class="rowBtn regionBtn" id="regionBtn" aria-haspopup="dialog"></button>
+        <div class="rowBtn static"><span class="ri" style="--c:#38c6e8"><svg viewBox="0 0 24 24"><path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/></svg></span><span class="rl"><b>Daily water goal</b><small id="wgNote">Used by the bottle on Today</small></span>
+          <span class="stepper"><button type="button" id="wgMinus" aria-label="Less water">−</button><output id="wgVal">2,500</output><button type="button" id="wgPlus" aria-label="More water">+</button></span></div>
+      </div>
+
+      <h2 class="h2s">Sound &amp; feel</h2>
+      <div class="group">
+        <label class="rowBtn static"><span class="ri" style="--c:#ffb23e"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM15.500 8.500a5 5 0 0 1 0 7M18.500 5.500a9 9 0 0 1 0 13"/></svg></span><span class="rl"><b>Sounds</b><small>Dings, bubbles and chimes (they play even on silent)</small></span><input type="checkbox" class="switch" id="fxSound"></label>
+        <div class="rowBtn static" data-silent><span class="ri" style="--c:#8b7cff"><svg viewBox="0 0 24 24"><path d="M4 14v-4M9 17V7M14 20V4M19 15V9"/></svg></span><span class="rl"><b>Volume</b></span><input type="range" id="fxVol" min="0" max="100" step="5" aria-label="Volume" data-silent></div>
+        <label class="rowBtn static"><span class="ri" style="--c:#ff6f91"><svg viewBox="0 0 24 24"><path d="M8 4h8v16H8zM4 8v8M20 8v8"/></svg></span><span class="rl"><b>Haptics</b><small>A small buzz on taps and wins</small></span><input type="checkbox" class="switch" id="fxHaptics"></label>
+        <label class="rowBtn static"><span class="ri" style="--c:#2fb0f2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></span><span class="rl"><b>Tap sounds</b><small>A soft tick when you press buttons</small></span><input type="checkbox" class="switch" id="fxTicks"></label>
+        <label class="rowBtn static"><span class="ri" style="--c:#46c08f"><svg viewBox="0 0 24 24"><path d="M12 3l2 5 5 .5-4 3.500 1.200 5-4.200-2.800L7.800 17 9 12 5 8.500 10 8z"/></svg></span><span class="rl"><b>Animations</b><small>Confetti, waves and motion</small></span><input type="checkbox" class="switch" id="fxMotion"></label>
+        <div class="rowBtn static" data-silent><span class="rl"><b>Try them</b></span><span class="tryRow"><button type="button" data-try="blip">Water</button><button type="button" data-try="ding">Ding</button><button type="button" data-try="success">Done</button><button type="button" data-try="win">Win</button></span></div>
+      </div>
+
+      <h2 class="h2s">Data</h2>
+      <p class="hint" style="margin:0 4px">A copy of your data is saved automatically every day at 12:00 (Qatar time) and kept for 30 days. Restoring replaces your current data with that day's copy (your current data is saved first).</p>
+      <div id="backupList"></div>
+      <div class="group">
+        <button type="button" class="rowBtn" id="backupNow"><span class="ri" style="--c:#46c08f"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg></span><span class="rl"><b>Back up now</b></span></button>
+        <button type="button" class="rowBtn" id="testConn"><span class="ri" style="--c:#2fb0f2"><svg viewBox="0 0 24 24"><path d="M5 12.500a10 10 0 0 1 14 0M8.500 16a5 5 0 0 1 7 0M12 20h.01"/></svg></span><span class="rl"><b>Test connection</b><small>Checks the server and the AI</small></span></button>
+        <button type="button" class="rowBtn" id="installBtn" hidden><span class="ri" style="--c:#8b7cff"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></span><span class="rl"><b>Install the app</b></span></button>
+      </div>
+      <p class="status" id="testStatus" role="status"></p>
+      <p class="hint" id="installHint" hidden></p>
+
+      <details class="acctMore"><summary>Password and account</summary>
+        <label for="pwOld">Current password</label><input id="pwOld" type="password" autocomplete="current-password">
+        <label for="pwNew">New password (8+ characters)</label><input id="pwNew" type="password" autocomplete="new-password" minlength="8">
+        <div class="row wrap"><button type="button" id="pwGo">Change password</button></div>
+        <p class="status" id="acctStatus" role="status"></p>
+        <button type="button" class="link left danger" id="delAcct">Delete my account and all its data…</button>
+      </details>
+      <div class="group"><button type="button" class="rowBtn danger" id="signOutBtn"><span class="rl"><b>Sign out</b></span></button></div>
+    </form>
   </section>
 </main>
 
@@ -211,34 +274,6 @@
   <div class="sheet cook" id="cookSheet"></div>
 </dialog>
 
-<dialog id="settingsDlg">
-  <form method="dialog" class="sheet" id="settingsForm">
-    <div class="closeRow"><button type="button" class="link" id="closeSettings">Close</button></div>
-    <h2 style="margin:0">Account</h2>
-    <p class="hint" id="acctEmail" style="margin:0"></p>
-    <p class="status" id="syncStatus" role="status"></p>
-    <div class="row wrap"><button type="button" id="syncNow">Sync now</button></div>
-    <hr class="setHr"><h2 class="h2s">Daily backup</h2>
-    <p class="hint" style="margin:0">A copy of your data is saved automatically every day at 12:00 (Qatar time) and kept for 30 days. Restoring replaces your current data with that day's copy (your current data is saved first).</p>
-    <div id="backupList"></div>
-    <div class="row wrap"><button type="button" id="backupNow">Back up now</button></div>
-    <hr class="setHr"><h2 class="h2s">Preferences</h2>
-    <label for="regionBtn">Region for food data</label>
-    <button type="button" id="regionBtn" class="regionBtn" aria-haspopup="dialog"></button>
-    <button type="button" class="link left" id="editGoalsBtn">Edit profile and goals</button>
-    <p class="status" id="testStatus" role="status"></p>
-    <div class="row wrap"><button type="button" id="testConn">Test connection</button><button type="button" id="installBtn" hidden>Install the app</button></div>
-    <p class="hint" id="installHint" hidden></p>
-    <details class="acctMore"><summary>Password and account</summary>
-      <label for="pwOld">Current password</label><input id="pwOld" type="password" autocomplete="current-password">
-      <label for="pwNew">New password (8+ characters)</label><input id="pwNew" type="password" autocomplete="new-password" minlength="8">
-      <div class="row wrap"><button type="button" id="pwGo">Change password</button></div>
-      <p class="status" id="acctStatus" role="status"></p>
-      <button type="button" class="link left danger" id="delAcct">Delete my account and all its data…</button>
-    </details>
-    <div class="setFoot"><button type="button" class="link left danger" id="signOutBtn">Sign out</button><button type="submit" class="primary" id="saveSettings" value="save">Save</button></div>
-  </form>
-</dialog>
 
 <dialog id="mealDlg">
   <form method="dialog" class="sheet" id="mealForm">
@@ -313,6 +348,7 @@
   document.addEventListener('wheel', function (e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
 })();
 </script>
+<script src="fx.js"></script>
 <script src="config.js"></script>
 <script src="countries.js"></script>
 <script src="db.js"></script>
@@ -327,6 +363,7 @@
 <script src="composer.js"></script>
 <script src="goals.js"></script>
 <script src="today.js"></script>
+<script src="water.js"></script>
 <script src="recipes.js"></script>
 <script src="nutrition.js"></script>
 <script src="insights.js"></script>
@@ -353,5 +390,6 @@
 <script src="scan.js"></script>
 <script src="chatfx.js"></script>
 <script src="gym-plan.js"></script>
+<script src="coach.js"></script>
 </body>
 </html>
