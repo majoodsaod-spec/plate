@@ -1,0 +1,66 @@
+/* Plate motion and depth system. Loaded after theme.css, so these win.
+   Principles (from Apple HIG / WWDC fluid-interface talks, Material 3 motion tokens, Nielsen Norman duration research, web.dev animation performance):
+   1. Respond inside 100 ms; feedback 100-150 ms, state changes 200-300 ms, nothing routine over 300 ms; exits about 75% of entrances.
+   2. Move things with springs (they keep velocity and can be interrupted); fades and colours use short ease-out curves.
+   3. Only animate transform and opacity (compositor, no layout); never put a transform on an ancestor of a position:fixed element.
+   4. Depth = elevation (shadow + a lighter surface as things rise) + a dimmed layer behind whatever is on top.
+   5. Everything off for Reduce Motion; nothing animates while the page is hidden. */
+:root {
+  --d-instant: 90ms; --d-quick: 140ms; --d-base: 220ms; --d-slow: 320ms;
+  --ease-std: cubic-bezier(.2, 0, 0, 1);                 /* things that move within the screen */
+  --ease-in: cubic-bezier(.05, .7, .1, 1);               /* things arriving: fast start, long soft landing */
+  --ease-out: cubic-bezier(.3, 0, .8, .15);              /* things leaving: they accelerate away */
+  /* --spring, --spring-soft, --spring-crit are replaced at start by real damped-spring curves (motion.js); these are the fallbacks */
+  --spring: cubic-bezier(.3, 1.45, .45, 1); --spring-soft: cubic-bezier(.25, 1.15, .4, 1); --spring-crit: cubic-bezier(.2, 0, 0, 1);
+  /* elevation: a tight contact shadow plus a wide soft one; higher = further from the page */
+  --e1: 0 1px 2px rgba(13, 38, 56, .06), 0 4px 12px rgba(13, 38, 56, .06);
+  --e2: 0 2px 4px rgba(13, 38, 56, .08), 0 10px 24px rgba(13, 38, 56, .10);
+  --e3: 0 4px 8px rgba(13, 38, 56, .10), 0 18px 40px rgba(13, 38, 56, .16);
+  --e4: 0 8px 16px rgba(13, 38, 56, .14), 0 32px 72px rgba(13, 38, 56, .26);
+  --scrim: rgba(3, 10, 18, .52);
+  --z-dock: 40; --z-composer: 45; --z-sheet: 100; --z-toast: 140;
+}
+@media (prefers-color-scheme: dark) { :root { --e1: 0 1px 2px rgba(0,0,0,.35), 0 4px 12px rgba(0,0,0,.25); --e2: 0 2px 4px rgba(0,0,0,.4), 0 10px 24px rgba(0,0,0,.34); --e3: 0 4px 8px rgba(0,0,0,.45), 0 18px 40px rgba(0,0,0,.45); --e4: 0 8px 16px rgba(0,0,0,.5), 0 32px 72px rgba(0,0,0,.6); --scrim: rgba(0, 0, 0, .6); } }
+
+/* ---- instant touch response ---- */
+html { -webkit-tap-highlight-color: transparent; }
+button, a, summary, [role="tab"], [role="button"], label, .meal, .seg, .chips button, .qchips button { touch-action: manipulation; }
+button:not(:disabled):active, .photoBtn:active, .meal:active, .qchips button:active, .chips button:active, .seg:active, summary:active {
+  transform: scale(.965); transition-duration: var(--d-instant); transition-timing-function: var(--ease-std); }
+button, .photoBtn, .meal, .qchips button, .chips button { transition-property: transform, background-color, border-color, box-shadow, opacity; transition-duration: .38s, .18s, .18s, .18s, .18s; transition-timing-function: var(--spring), ease-out, ease-out, ease-out, ease-out; }   /* press is fast, release springs back */
+.dock [role="tab"]:active svg { transform: scale(.88); transition: transform var(--d-instant) var(--ease-std); }
+.dock [role="tab"] svg { transition: transform .4s var(--spring); }
+.dock [role="tab"].on svg { animation: dockPop .42s var(--spring) backwards; }
+@keyframes dockPop { from { transform: scale(.82) translateY(2px); } }
+
+/* ---- depth: surfaces rise, the page behind steps back ---- */
+.card, .group, .meal, #remBox { box-shadow: var(--e1); }
+.card:active { box-shadow: none; }
+.composer { box-shadow: var(--e2); z-index: var(--z-composer); }
+.dock { z-index: var(--z-dock); }
+dialog::backdrop { background: var(--scrim); animation: fade var(--d-base) linear backwards; }
+dialog[open] .sheet, dialog[open] > form.sheet { box-shadow: var(--e4); animation: sheetUp .46s var(--spring-soft) backwards; }
+@keyframes sheetUp { from { transform: translateY(56px) scale(.985); opacity: 0; } 35% { opacity: 1; } }
+.toast, #toast { box-shadow: var(--e3); z-index: var(--z-toast); }
+
+/* ---- chat: a sent message springs up from the composer, a reply settles in ---- */
+.msg.fxSend { animation: fxSend .42s var(--spring-soft) backwards; transform-origin: 100% 100%; }
+.msg.fxIn { animation: fxIn .3s var(--ease-in) backwards; transform-origin: 0 100%; }
+@keyframes fxSend { from { opacity: 0; transform: translateY(24px) scale(.9); } 40% { opacity: 1; } }
+@keyframes fxIn { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+
+/* ---- the muscle map: colour eases, a tapped muscle presses in ---- */
+.mus path { transition: fill var(--d-base) var(--ease-std), opacity var(--d-quick); }
+.mus:active path { opacity: .8; }
+.mus.on path { animation: musOn .36s var(--spring) backwards; }
+@keyframes musOn { from { opacity: .4; } }
+
+/* ---- cheap infinite animations: promoted to their own layer, and frozen when you cannot see them ---- */
+.bub, .w1, .w2, .streak svg, .cOrb { will-change: transform; }
+html.docHidden *, html.docHidden *::before, html.docHidden *::after { animation-play-state: paused !important; }
+#waterCard { contain: layout paint; }
+
+/* ---- Reduce Motion (the phone setting or Plate's own switch): no movement, instant fades ---- */
+@media (prefers-reduced-motion: reduce) { :root { --d-instant: 1ms; --d-quick: 1ms; --d-base: 1ms; --d-slow: 1ms; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+.toast { transition: opacity var(--d-base) linear, transform .42s var(--spring-soft); }
