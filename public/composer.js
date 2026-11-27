@@ -45,8 +45,16 @@
     if (locked && !isChatField(document.activeElement)) { unlock(); settle(); }
     if (vv && vv.scale <= 1.01 && (window.scrollX > 0.5 || vv.offsetLeft > 0.5)) { window.scrollTo(0, window.scrollY); }
   }
+  /* the bottom tab bar is fixed to the bottom of the page's own viewport. After the keyboard closes, iOS can leave that viewport shorter than the visible screen, which lifts the bar
+     into the middle of the screen. Measure the gap between the two and push the bar (and the chat boxes' resting place) down by exactly that much. */
+  function dockFix() {
+    if (!vv) return;
+    const gap = typing ? 0 : Math.max(0, Math.round(vv.offsetTop + vv.height - window.innerHeight));
+    const v = (gap > 6 && vv.scale <= 1.01 ? gap : 0) + 'px';
+    if (root.style.getPropertyValue('--dockShift') !== v) root.style.setProperty('--dockShift', v);
+  }
   function place() {
-    sanity();
+    dockFix(); sanity();
     if (locked) { const ta = document.activeElement; const before = unpanned; unpan(); if (unpanned !== before && isChatField(ta)) { try { ta.setSelectionRange(ta.selectionStart, ta.selectionEnd); } catch (e) {} } }
     const kb = inset(); kbOpen = typing && kb > 90;      // small differences are the browser's own toolbar, not a keyboard
     root.style.setProperty('--kb', (kbOpen ? kb : 0) + 'px');
@@ -115,4 +123,6 @@
   if (window.MutationObserver) { let q = 0; new MutationObserver(() => { if (q) return; q = requestAnimationFrame(() => { q = 0; grow(); reserve(); }); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] }); }
   if (window.ResizeObserver) { const ro = new ResizeObserver(reserve); const watch = () => document.querySelectorAll(FLOAT).forEach((f) => ro.observe(f)); watch(); setTimeout(watch, 1500); }
   place();
+  window.addEventListener('pageshow', () => { place(); settle(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { place(); settle(); } });
+  setInterval(() => { if (!document.hidden) dockFix(); }, 800);
 })();

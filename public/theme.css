@@ -46,7 +46,8 @@ main { padding: 10px 14px calc(var(--dockH) + 28px); max-width: 560px; }
 .dock button.on::after { content: ""; position: absolute; top: -7px; width: 22px; height: 3px; border-radius: 3px; background: var(--accent); animation: pip .35s var(--spring); }
 .dock button:active svg { transform: scale(.86); }
 @keyframes pip { from { transform: scaleX(0); opacity: 0; } }
-html.kb-open .dock, html.chatlock .dock { transform: translateY(110%); }
+html.kb-open .dock, html.chatlock .dock { transform: translateY(calc(110% + var(--dockShift, 0px))); }
+.dock { transform: translateY(var(--dockShift, 0px)); }
 #gcForm, #nForm, #chatForm { bottom: calc(var(--dockH) + 8px); }
 html.kb-open #gcForm, html.kb-open #nForm, html.kb-open #chatForm { bottom: calc(var(--kb) + 8px); }
 
