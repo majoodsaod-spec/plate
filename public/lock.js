@@ -23,4 +23,12 @@
     return r;
   };
   document.addEventListener('close', (e) => { if (open.delete(e.target) && !open.size) unlock(); }, true);
+
+  /* portrait only. Android installs honour the manifest and this call; iPhone does not allow any web app to lock rotation, so there the app covers the screen
+     with a "turn upright" card while the phone is on its side, and uncovers it the moment it is upright again. */
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(() => {}); } catch (e) {}
+  const veil = document.createElement('div'); veil.id = 'rotVeil'; veil.setAttribute('aria-hidden', 'true');
+  veil.innerHTML = '<div><svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><b>Turn your phone upright</b></div>';
+  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(veil));
+  if (document.body) document.body.appendChild(veil);
 })();
