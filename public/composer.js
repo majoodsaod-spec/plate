@@ -112,7 +112,7 @@
   });
   document.addEventListener('focusout', () => setTimeout(() => { typing = isField(document.activeElement); if (!isChatField(document.activeElement)) { unlock(); settle(); } burst(800); }, 120));
   /* the boxes are redrawn and shown/hidden by other code: keep measurements fresh */
-  if (window.MutationObserver) new MutationObserver(() => { grow(); reserve(); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  if (window.MutationObserver) { let q = 0; new MutationObserver(() => { if (q) return; q = requestAnimationFrame(() => { q = 0; grow(); reserve(); }); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] }); }
   if (window.ResizeObserver) { const ro = new ResizeObserver(reserve); const watch = () => document.querySelectorAll(FLOAT).forEach((f) => ro.observe(f)); watch(); setTimeout(watch, 1500); }
   place();
 })();

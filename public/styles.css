@@ -817,9 +817,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 #scanLabel { margin: 4px 0 10px; }
 .scanSheet.noCam .scanView { display: none; }
 /* ---------- chat polish ---------- */
-.msg.fxSend { animation: fxSend .38s cubic-bezier(.2, 1.25, .35, 1) both; transform-origin: 100% 100%; }
+.msg.fxSend { animation: fxSend .3s cubic-bezier(.2, 1.25, .35, 1) both; transform-origin: 100% 100%; }
 @keyframes fxSend { from { opacity: 0; transform: translateY(26px) scale(.9); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
-.fxIn { animation: fxIn .34s cubic-bezier(.2, .8, .3, 1) both; transform-origin: 0 100%; }
+.fxIn { animation: fxIn .26s cubic-bezier(.2, .8, .3, 1) both; transform-origin: 0 100%; }
 @keyframes fxIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
 .fxw { animation: fxWord .32s ease-out both; }
 @keyframes fxWord { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: none; } }

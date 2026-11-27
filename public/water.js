@@ -79,11 +79,12 @@
 
   /* a drink: update the stored total and the day's list, then splash */
   async function add(ml) {
+    FX.play(ml <= 150 ? 'drop1' : ml <= 300 ? 'drop2' : 'drop3');                    // instantly, before any saving, so the tap feels immediate
     const day = shown || DB.dayKey(), before = await totalOf(day), after = before + ml;
     await DB.set('water:' + day, after);
     const L = (await DB.get('waterLog:' + day, [])) || []; L.push({ t: Date.now(), ml }); await DB.set('waterLog:' + day, L.slice(-80));
     const hit = before < goal && after >= goal;
-    FX.play(hit ? 'cheer' : 'blip'); FX.haptic(hit ? [40, 60, 40, 60, 140] : 12);
+    if (hit) FX.play('cheer'); FX.haptic(hit ? [40, 60, 40, 60, 140] : 12);
     if (hit) { FX.confetti('drops'); FX.confetti('burst'); }
     await draw(day); splash(hit);
   }

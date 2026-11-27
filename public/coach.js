@@ -352,19 +352,35 @@ ${NAMES()}`;
     const sp = m.split ? `<div class="miniw"><b>${esc(m.split.name)}</b><small>${m.split.days.map((k, j) => GP().WK3[j] + ' ' + GP().DAYS[k].label).join(' · ')}</small><button type="button" class="primary" data-cs="${i}">Use this split</button></div>` : '';
     return `<div class="msg ai ans">${window.Plate.md(m.text)}${act}${w}${sp}</div>`;
   }
-  function draw(scroll) {
-    const root = $('#gCoach'); if (!root) return;
-    const old = $('#gcIn'), keep = old ? { v: old.value, f: document.activeElement === old, s: old.selectionStart, e: old.selectionEnd } : null;
-    const real = S.msgs, from = S.showAll ? 0 : Math.max(0, real.length - SHOW), last = real[real.length - 1];
-    const quick = !S.busy && last && last.role === 'ai' && last.quick && last.quick.length ? last.quick : (!real.length ? STARTERS : []);
-    root.innerHTML = `<div class="cTop"><div class="cWho"><span class="cDot"></span><div><b>Your coach</b><small>${S.facts.length ? S.facts.length + ' thing' + (S.facts.length === 1 ? '' : 's') + ' remembered' : 'Learns as you chat'}</small></div></div>
-        <div class="cBtns"><button type="button" id="cMem" class="cBtn">Memory</button><button type="button" id="cNew" class="cBtn" ${real.length ? '' : 'disabled'}>New chat</button></div></div>
-      <div class="chat" id="gcChat" aria-live="polite">${from > 0 ? '<button type="button" class="link" id="cEarlier">Show earlier messages</button>' : ''}${real.length ? real.slice(from).map((m, k) => msgHTML(m, from + k)).join('') : '<div class="cHello"><div class="cOrb"></div><h2>Hi, I\'m your coach.</h2><p class="hint">Tell me what you did and I\'ll log it, ask what to train, or have me change a workout. I remember your injuries, gear and goals, and I\'ll ask when something is missing instead of guessing.</p></div>'}</div>
-      <div class="chips" id="gcChips">${quick.map((q) => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+  /* The screen is built once. After that only the parts that changed are updated, so the message box keeps its keyboard and focus,
+     old messages are not redrawn (and never replay their animation), and only the newest message animates in. */
+  function shell(root) {
+    root.innerHTML = `<div class="cTop"><div class="cWho"><span class="cDot"></span><div><b>Your coach</b><small id="cSub">Learns as you chat</small></div></div>
+        <div class="cBtns"><button type="button" id="cMem" class="cBtn">Memory</button><button type="button" id="cNew" class="cBtn">New chat</button></div></div>
+      <div class="chat" id="gcChat" aria-live="polite"></div>
+      <div class="chips" id="gcChips"></div>
       <form class="composer" id="gcForm" autocomplete="off"><div class="taWrap" style="flex:1;min-width:0"><textarea id="gcIn" rows="1" maxlength="700" placeholder="Message your coach…" aria-label="Message"></textarea></div><button class="primary sendBtn" type="submit" id="gcGo" aria-label="Send">${ARROW}</button></form>
       <p class="hint nfoot">General fitness guidance, not medical advice. If something hurts, stop and see a doctor or physio.</p>`;
-    if (scroll) { const l = $('#gcChat').lastElementChild; if (l && real.length > 1) l.scrollIntoView({ block: 'end', behavior: 'smooth' }); }
-    const nw = $('#gcIn'); if (keep && nw && keep.v) { nw.value = keep.v; if (keep.f) { nw.focus({ preventScroll: true }); try { nw.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
+  }
+  let drawn = [];                                                   // what #gcChat currently shows: [id, signature] per message
+  const sig = (m) => m.id + '|' + (m.wait ? 'w' : '') + (m.act ? (m.act.undone ? 'u' : 'a') : '') + (m.workout ? 'W' : '') + (m.split ? 'S' : '') + (m.err ? 'e' : '') + String(m.text || '').length;
+  function draw(scroll) {
+    const root = $('#gCoach'); if (!root) return;
+    if (!$('#gcChat')) { shell(root); drawn = []; }
+    const real = S.msgs, from = S.showAll ? 0 : Math.max(0, real.length - SHOW), shown = real.slice(from), last = real[real.length - 1];
+    const quick = !S.busy && last && last.role === 'ai' && last.quick && last.quick.length ? last.quick : (!real.length ? STARTERS : []);
+    $('#cSub').textContent = S.facts.length ? S.facts.length + ' thing' + (S.facts.length === 1 ? '' : 's') + ' remembered' : 'Learns as you chat';
+    $('#cNew').disabled = !real.length;
+    const chat = $('#gcChat'), want = shown.map(sig), same = want.length === drawn.length && want.every((x, i) => x === drawn[i]);
+    if (!same) {
+      const nearEnd = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80 || scroll;
+      const hello = '<div class="cHello"><div class="cOrb"></div><h2>Hi, I\'m your coach.</h2><p class="hint">Tell me what you did and I\'ll log it, ask what to train, or have me change a workout. I remember your injuries, gear and goals, and I\'ll ask when something is missing instead of guessing.</p></div>';
+      chat.innerHTML = (from > 0 ? '<button type="button" class="link" id="cEarlier">Show earlier messages</button>' : '') + (shown.length ? shown.map((m, k) => msgHTML(m, from + k)).join('') : hello);
+      drawn = want;
+      if (nearEnd && shown.length > 1) { const l = chat.lastElementChild; if (l) l.scrollIntoView({ block: 'end', behavior: 'smooth' }); }
+    }
+    const chips = $('#gcChips'), ck = quick.join('\u0001');
+    if (chips.dataset.k !== ck) { chips.dataset.k = ck; chips.innerHTML = quick.map((q) => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join(''); }
   }
 
   /* memory sheet */
