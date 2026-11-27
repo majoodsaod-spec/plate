@@ -64,14 +64,16 @@
     document.documentElement.dataset.tab = name;
     if (remember !== false && name !== 'me') { try { localStorage.setItem('plate.tab', name); } catch (e) {} }
     if (name === 'me') openSettings();
-    else if (hooks[name]) { if (!warmed[name]) { warmed[name] = 1; hooks[name](); } else setTimeout(() => hooks[name](), 0); }   // the page is already built: show it first, refresh it after the paint
+    else if (hooks[name]) { if (!warmed[name]) { warmed[name] = 1; hooks[name](); } else requestAnimationFrame(() => setTimeout(() => { if (current === name) hooks[name](); }, 0)); }   // the page is already built: show it first, refresh it after the paint
     if (was !== name) { window.scrollTo(0, 0); }
   }
   /* build every other tab once in the background, a little after start, so even the first visit to each is instant */
   (window.requestIdleCallback || ((f) => setTimeout(f, 900)))(() => ['eat', 'gym', 'coach', 'insights'].forEach((n, i) => setTimeout(() => { if (n !== current && !warmed[n] && hooks[n]) { warmed[n] = 1; try { const r = hooks[n](); if (r && r.catch) r.catch(() => {}); } catch (e) {} } }, 300 + i * 250)));
   window.Plate.showTab = showTab; window.Plate.currentTab = () => current;
-  $$('.dock [role="tab"]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
-  $$('[data-esec]').forEach((b) => b.addEventListener('click', () => showEat(b.dataset.esec)));
+  /* react on touch-down, not on release (about 50-100 ms sooner); the click that follows is ignored, and a keyboard click (detail 0) still works */
+  const quick = (b, fn) => { let at = 0; b.addEventListener('pointerdown', (e) => { if (e.button > 0 || !e.isPrimary) return; at = performance.now(); fn(); }); b.addEventListener('click', (e) => { if (performance.now() - at < 800) return; fn(); }); };
+  $$('.dock [role="tab"]').forEach((b) => quick(b, () => showTab(b.dataset.tab)));
+  $$('[data-esec]').forEach((b) => quick(b, () => showEat(b.dataset.esec)));
   $('.dock').addEventListener('keydown', (e) => {
     const T = TABS.filter((t) => t !== 'me'), i = T.indexOf(document.activeElement.dataset && document.activeElement.dataset.tab);
     if (i < 0 || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
