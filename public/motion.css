@@ -64,3 +64,6 @@ html.docHidden *, html.docHidden *::before, html.docHidden *::after { animation-
 @media (prefers-reduced-motion: reduce) { :root { --d-instant: 1ms; --d-quick: 1ms; --d-base: 1ms; --d-slow: 1ms; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 .toast { transition: opacity var(--d-base) linear, transform .42s var(--spring-soft); }
+/* nothing inside a sheet passes its scrolling on to the page behind */
+dialog, dialog .sheet { overscroll-behavior: contain; }
+html.modalOpen { overflow: hidden; }
